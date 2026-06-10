@@ -59,13 +59,13 @@ oninput="S.carName=this.value;saveDraft()">
 <span>⚙️ Текущие курсы валют</span><span class="coll-arrow" style="transform:rotate(${S.showSettings?180:0}deg)">▾</span></div>
 ${S.showSettings?`<div class="coll-body">
 <div class="rates-row" style="flex-wrap:wrap">
-${S.activeCur.map(c=>`<div style="flex:1 1 40%;min-width:120px"><label class="rate-label ${CUR[c].cls}">${CUR[c].symbol} ${c} / ₽</label>
-<input type="number" class="rate-input ${CUR[c].cls}" value="${S.rates[c]||""}" oninput="S.rates['${c}']=this.value;saveDraft()" onchange="render()"></div>`).join("")}
+${S.activeCur.map(c=>`<div style="flex:1 1 40%;min-width:120px"><label class="rate-label ${curInfo(c).cls}">${curInfo(c).symbol} ${c} / ₽</label>
+<input type="number" class="rate-input ${curInfo(c).cls}" value="${esc(S.rates[c]||"")}" oninput="S.rates['${c}']=this.value;saveDraft()" onchange="render()"></div>`).join("")}
 </div>
 <div class="cur-chips">
 ${Object.keys(CUR).filter(c=>c!=="RUB").map(c=>`<div class="cur-chip ${S.activeCur.includes(c)?"active":""}" onclick="togCur('${c}')">${CUR[c].symbol} ${c} · ${CUR[c].label}</div>`).join("")}</div>
 <div class="cbr-row">
-<input type="date" class="cbr-date" value="${S.cbrDate}" oninput="S.cbrDate=this.value" title="Дата курса (пусто — сегодня)">
+<input type="date" class="cbr-date" value="${esc(S.cbrDate)}" oninput="S.cbrDate=this.value" title="Дата курса (пусто — сегодня)">
 <div class="cbr-btn" onclick="fetchCbr()">↻ КУРС ЦБ</div></div>
 <div class="rate-hint" id="cbr-info">${S.cbrInfo||"Кнопка подтянет официальный курс ЦБ РФ — на сегодня или на выбранную дату (для оплат задним числом)."}</div>
 <div class="rate-hint">💡 Курс фиксируется за каждой позицией в момент добавления. Платишь таможню через месяц по новому курсу — поменяй курс здесь перед добавлением позиции, либо отредактируй позицию на складе.</div></div>`:""}</div>
@@ -87,26 +87,26 @@ ${[...S.activeCur,"RUB"].map(c=>`<div class="btn-currency ${CUR[c].cls}" onclick
 
 if(S.entries.length>0){
 h+=`<div class="entries-box"><div class="entries-header"><span>ПОЗИЦИИ (${S.entries.length})</span><span>СЕБЕСТ: ${fmt(t)} ₽</span></div>`;
-S.entries.forEach((e,i)=>{const cm=CUR[e.currency]||CUR.RUB;
+S.entries.forEach((e,i)=>{const cm=curInfo(e.currency);
 if(S.editingEntry===i){
 h+=`<div class="entry-edit-form">
-<div style="color:#888;font-size:10px;margin-bottom:6px">${e.icon} ${e.label} — редактирование</div>
+<div style="color:#888;font-size:10px;margin-bottom:6px">${esc(e.icon)} ${esc(e.label)} — редактирование</div>
 <label class="edit-lbl">СУММА</label>
-<input type="number" class="entry-edit-input" value="${S.editValue}" oninput="S.editValue=this.value">
+<input type="number" class="entry-edit-input" value="${esc(S.editValue)}" oninput="S.editValue=this.value">
 <div class="profit-curr-row" style="margin-bottom:8px">
-${[...new Set(["RUB",...S.activeCur,S.editCurr])].map(c=>`<div class="pcb ${S.editCurr===c?"a-"+CUR[c].cls:""}"
-onclick="S.editCurr='${c}';S.editRate=S.rates['${c}']||'';render()">${CUR[c].symbol} ${c}</div>`).join("")}</div>
-${S.editCurr!=="RUB"?`<label class="edit-lbl">КУРС ${CUR[S.editCurr].symbol}/₽ (на дату оплаты)</label>
-<input type="number" class="entry-edit-input" value="${S.editRate}" oninput="S.editRate=this.value">`:""}
+${[...new Set(["RUB",...S.activeCur,S.editCurr])].map(c=>`<div class="pcb ${S.editCurr===c?"a-"+curInfo(c).cls:""}"
+onclick="S.editCurr='${esc(c)}';S.editRate=S.rates['${esc(c)}']||'';render()">${curInfo(c).symbol} ${esc(c)}</div>`).join("")}</div>
+${S.editCurr!=="RUB"?`<label class="edit-lbl">КУРС ${curInfo(S.editCurr).symbol}/₽ (на дату оплаты)</label>
+<input type="number" class="entry-edit-input" value="${esc(S.editRate)}" oninput="S.editRate=this.value">`:""}
 <div style="display:flex;gap:8px">
 <div class="btn-action btn-green" style="flex:1;margin:0;padding:10px 0;font-size:11px" onclick="saveEdit(${i})">✅ СОХРАНИТЬ</div>
 <div class="btn-action btn-outline" style="flex:0 0 auto;margin:0;padding:10px 16px;font-size:11px" onclick="cancelEdit()">✕</div></div></div>`;
 }else{
 const r=entryRate(e,S.rates);
-h+=`<div class="entry-row"><div style="flex:1"><div class="entry-label">${e.icon} ${e.label}</div>
-${e.currency!=="RUB"?`<div class="entry-rate">курс ${fmtRate(r)} ₽</div>`:""}</div>
+h+=`<div class="entry-row"><div style="flex:1"><div class="entry-label">${esc(e.icon)} ${esc(e.label)}</div>
+${e.currency!=="RUB"?`<div class="entry-rate">курс ${r?fmtRate(r):"⚠ нет курса"} ₽</div>`:""}</div>
 <div style="text-align:right;display:flex;align-items:center;gap:4px"><div>
-<div class="entry-amount ${cm.cls}">${fmt(e.amount)} ${cm.symbol}</div>
+<div class="entry-amount ${cm.cls}">${esc(fmt(e.amount))} ${cm.symbol}</div>
 ${e.currency!=="RUB"?`<div class="entry-rub">≈ ${fmt(entryRub(e,S.rates))} ₽</div>`:""}</div>
 <div class="entry-act edit" onclick="startEdit(${i})">✎</div>
 <div class="entry-act del" onclick="delEntry(${i})">✕</div></div></div>`}});
@@ -118,9 +118,9 @@ h+=`<div class="profit-box"><div class="coll-header" onclick="S.showProfit=!S.sh
 <span>📊 Расчёт прибыли</span><span class="coll-arrow" style="transform:rotate(${S.showProfit?180:0}deg)">▾</span></div>
 ${S.showProfit?`<div class="profit-body">
 <div class="profit-input-group"><label>💰 Продажа</label>
-<input type="number" class="profit-input" placeholder="0" value="${S.sellPrice}" oninput="S.sellPrice=this.value;saveDraft();rProfit()"></div>
+<input type="number" class="profit-input" placeholder="0" value="${esc(S.sellPrice)}" oninput="S.sellPrice=this.value;saveDraft();rProfit()"></div>
 <div class="profit-curr-row">
-${[...new Set(["RUB",...S.activeCur,S.sellCurrency])].map(c=>`<div class="pcb ${S.sellCurrency===c?"a-"+CUR[c].cls:""}" onclick="S.sellCurrency='${c}';saveDraft();render()">${CUR[c].symbol} ${c}</div>`).join("")}</div>
+${[...new Set(["RUB",...S.activeCur,S.sellCurrency])].map(c=>`<div class="pcb ${S.sellCurrency===c?"a-"+curInfo(c).cls:""}" onclick="S.sellCurrency='${esc(c)}';saveDraft();render()">${curInfo(c).symbol} ${esc(c)}</div>`).join("")}</div>
 <div class="pr-box" id="pr-results">${prHTML(pCalc(t))}</div></div>`:""}</div>`}
 
 if(S.showReceipt&&S.entries.length>0)h+=receiptHTML();

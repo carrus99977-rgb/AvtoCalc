@@ -28,13 +28,15 @@ carReceipts:{},confirmAction:null};
 
 // ===== PERSISTENCE =====
 function loadAll(){
-try{const w=localStorage.getItem("autoCalc_wh");if(w)S.warehouse=JSON.parse(w)}catch(e){}
+try{const w=localStorage.getItem("autoCalc_wh");if(w){const arr=JSON.parse(w);
+S.warehouse=(Array.isArray(arr)?arr:[]).map(normalizeCar).filter(Boolean)}}catch(e){}
 try{const d=localStorage.getItem("autoCalc_draft");if(d){const dd=JSON.parse(d);
 S.carName=dd.carName||"";
 // миграция со старого формата (eurRate/usdRate) на карту курсов
 S.rates=dd.rates?{...DEFAULT_RATES,...dd.rates}:{...DEFAULT_RATES,EUR:dd.eurRate||DEFAULT_RATES.EUR,USD:dd.usdRate||DEFAULT_RATES.USD};
 S.activeCur=Array.isArray(dd.activeCur)&&dd.activeCur.length?dd.activeCur.filter(c=>CUR[c]&&c!=="RUB"):[...DEFAULT_ACTIVE];
-S.entries=dd.entries||[];S.curCat=dd.curCat||0;S.sellPrice=dd.sellPrice||"";
+S.entries=(Array.isArray(dd.entries)?dd.entries:[]).map(normalizeEntry).filter(Boolean);
+S.curCat=dd.curCat||0;S.sellPrice=dd.sellPrice||"";
 S.sellCurrency=CUR[dd.sellCurrency]?dd.sellCurrency:"RUB"}}catch(e){}
 }
 function saveWH(){try{localStorage.setItem("autoCalc_wh",JSON.stringify(S.warehouse))}catch(e){}}
@@ -67,7 +69,46 @@ function toR(a,c,rates){if(c==="RUB")return a;return a*parseFloat((rates&&rates[
 function ds(){return new Date().toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}
 function dShort(d){try{return new Date(d).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit",year:"numeric"})}catch(e){return d}}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
-function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+// Безопасный id для вставки в onclick: только [A-Za-z0-9_-], иначе мусор отбрасывается
+function safeId(id){return /^[A-Za-z0-9_-]+$/.test(String(id||""))?String(id):""}
+// Безопасный лукап валюты: данные из импорта/облака могут содержать валюту вне CUR.
+// Fallback-символ чистится до букв/цифр — он попадает и в HTML, и в canvas-чек без esc().
+function curInfo(c){if(CUR[c])return CUR[c];
+const safe=String(c||"?").replace(/[^A-Za-z0-9]/g,"").slice(0,6)||"?";
+return{symbol:safe,cls:"",label:safe,cbr:null}}
+
+// ===== ВАЛИДАЦИЯ ВХОДЯЩИХ ДАННЫХ (импорт и облако) =====
+// Любая машина из файла/облака проходит через normalizeCar: лишние поля
+// отбрасываются, типы приводятся, битые объекты возвращают null.
+function normalizeEntry(e){
+if(!e||typeof e!=="object")return null;
+if(!isFinite(parseFloat(e.amount)))return null;
+// валюта — только латиница 2-6 символов (реальные коды); мусор → RUB
+const cur=(typeof e.currency==="string"&&/^[A-Za-z]{2,6}$/.test(e.currency))?e.currency:"RUB";
+return{category:String(e.category||"other"),label:String(e.label||"Позиция"),
+icon:String(e.icon||"📦"),amount:parseFloat(e.amount),currency:cur,
+rate:cur==="RUB"?"":String(e.rate||"")}}
+function safeRates(o){if(!o||typeof o!=="object"||Array.isArray(o))return null;
+const r={};Object.keys(o).forEach(k=>{r[String(k)]=String(o[k]==null?"":o[k])});return r}
+function normalizeCar(c){
+if(!c||typeof c!=="object")return null;
+const entries=(Array.isArray(c.entries)?c.entries:[]).map(normalizeEntry).filter(Boolean);
+if(!entries.length)return null;
+const status=c.status==="sold"?"sold":"stock";
+const rates=safeRates(c.rates)||{EUR:String(c.eurRate||""),USD:String(c.usdRate||"")};
+const sellRates=safeRates(c.sellRates);
+return{id:safeId(c.id)||uid(),
+name:typeof c.name==="string"?c.name:String(c.name||"Без названия"),
+date:typeof c.date==="string"?c.date:new Date().toISOString(),
+rates,eurRate:String(rates.EUR||""),usdRate:String(rates.USD||""),
+entries,status,
+sellPrice:status==="sold"?String(c.sellPrice||""):"",
+sellCurrency:typeof c.sellCurrency==="string"?c.sellCurrency:"RUB",
+sellDate:c.sellDate||null,
+sellRates,
+sellEurRate:String((sellRates&&sellRates.EUR)||""),
+sellUsdRate:String((sellRates&&sellRates.USD)||"")}}
 // Карта курсов машины: новый формат — car.rates, старый — eurRate/usdRate
 function carRates(car){return car.rates||{EUR:car.eurRate,USD:car.usdRate}}
 function carSellRates(car){const r={...carRates(car)};

@@ -5,9 +5,9 @@ const pd=pCalc(t),hs=pd.sell>0,ip=pd.profit>=0;
 let h=`<div class="receipt-wrap animate" id="receipt-section"><div class="receipt"><div class="perf-top"></div>
 <div class="receipt-title"><h2>★ АВТО КАЛЬКУЛЯТОР ★</h2><div class="r-sub">РАСЧЁТ СЕБЕСТОИМОСТИ</div>
 ${cn.trim()?`<div class="r-car">🚗 ${esc(cn.trim().toUpperCase())}</div>`:""}<div class="r-date">${ds()}</div><div class="r-dash"></div></div>`;
-entries.forEach(e=>{const cm=CUR[e.currency]||CUR.RUB,r=entryRate(e,rates),rv=entryRub(e,rates);
-h+=`<div style="margin-bottom:8px"><div class="r-il">${e.icon} ${e.label}</div>
-<div class="r-ir"><span class="r-irl">${fmt(e.amount)} ${cm.symbol}${e.currency!=="RUB"?" × "+fmtRate(r):""}</span>
+entries.forEach(e=>{const cm=curInfo(e.currency),r=entryRate(e,rates),rv=entryRub(e,rates);
+h+=`<div style="margin-bottom:8px"><div class="r-il">${esc(e.icon)} ${esc(e.label)}</div>
+<div class="r-ir"><span class="r-irl">${esc(fmt(e.amount))} ${cm.symbol}${e.currency!=="RUB"?" × "+fmtRate(r):""}</span>
 <span class="r-irr">${fmt(rv)} ₽</span></div></div>`});
 h+=`<div class="r-dash-bold"></div><div class="r-total"><span>СЕБЕСТОИМОСТЬ:</span><span>${fmt(t)} ₽</span></div>`;
 if(hs){h+=`<div class="r-dash"></div>
@@ -41,7 +41,7 @@ if(opts.name){cx.fillStyle="#2c2c2c";cx.font="bold 14px 'Courier New',monospace"
 cx.font="10px 'Courier New',monospace";cx.fillStyle="#aaa";cx.fillText(ds(),mx,y);y+=18;
 cx.setLineDash([4,3]);cx.strokeStyle="#ccc";cx.lineWidth=1;cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=14;
 cx.setLineDash([]);
-opts.entries.forEach(e=>{const cm=CUR[e.currency]||CUR.RUB;
+opts.entries.forEach(e=>{const cm=curInfo(e.currency);
 const r=entryRate(e,opts.rates),rv=entryRub(e,opts.rates);
 cx.fillStyle="#2c2c2c";cx.font="bold 11px 'Courier New',monospace";cx.textAlign="left";cx.fillText(e.label,px,y);y+=16;
 cx.font="12px 'Courier New',monospace";cx.fillStyle="#888";cx.textAlign="left";
@@ -52,7 +52,7 @@ cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=12;
 cx.font="bold 17px 'Courier New',monospace";cx.fillStyle="#2c2c2c";cx.textAlign="left";cx.fillText("СЕБЕСТОИМОСТЬ:",px,y);
 cx.textAlign="right";cx.fillText(fmt(cost)+" ₽",rx,y);y+=22;
 if(hasSell){y+=4;cx.setLineDash([4,3]);cx.strokeStyle="#ccc";cx.lineWidth=1;cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=12;cx.setLineDash([]);
-const ip=profit>=0;const sCur=CUR[opts.sell.currency]||CUR.RUB;
+const ip=profit>=0;const sCur=curInfo(opts.sell.currency);
 const rows=[["ЦЕНА ПРОДАЖИ:",fmt(parseFloat(opts.sell.price))+" "+sCur.symbol+(opts.sell.currency!=="RUB"?" = "+fmt(sellRub)+" ₽":""),null]];
 if(opts.sell.currency!=="RUB")rows.push(["КУРС ПРОДАЖИ:",fmtRate(parseFloat(opts.sell.rates[opts.sell.currency]||0))+" ₽/"+sCur.symbol,null]);
 rows.push(["ПРИБЫЛЬ:",(ip?"+":"")+fmt(profit)+" ₽",ip],["НАЦЕНКА:",(ip?"+":"")+fmtD(markup,1)+"%",ip],["МАРЖА:",(ip?"+":"")+fmtD(margin,1)+"%",ip]);

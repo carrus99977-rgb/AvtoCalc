@@ -77,7 +77,8 @@ await flushQueue();
 // 2) забираем облако
 const{data,error}=await CL.sb.from("cars").select("id,data");
 if(error)throw error;
-const cloudCars=(data||[]).map(r=>r.data);
+// данные из облака могут быть произвольными — нормализуем (защита от битых/вредоносных записей)
+const cloudCars=(data||[]).map(r=>normalizeCar(r.data)).filter(Boolean);
 const cloudIds=new Set(cloudCars.map(c=>c.id));
 // 3) машины, которых нет в облаке (созданы офлайн до входа) — отправляем
 const toPush=S.warehouse.filter(c=>!cloudIds.has(c.id));

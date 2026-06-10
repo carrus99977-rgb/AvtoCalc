@@ -15,9 +15,11 @@ S.sellFormRate="";render()}
 function cancelSell(){S.sellingCarId=null;render()}
 function doSell(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 if(!parseFloat(S.sellFormPrice)){alert("Введите цену продажи");return}
+const sRate=S.sellFormRate||S.rates[S.sellFormCurr]||"";
+if(S.sellFormCurr!=="RUB"&&!(parseFloat(sRate)>0)){alert("Введите курс продажи");return}
 car.sellPrice=S.sellFormPrice;car.sellCurrency=S.sellFormCurr;
 car.sellRates={};
-if(S.sellFormCurr!=="RUB")car.sellRates[S.sellFormCurr]=S.sellFormRate||S.rates[S.sellFormCurr]||"";
+if(S.sellFormCurr!=="RUB")car.sellRates[S.sellFormCurr]=sRate;
 // зеркала для совместимости со старыми версиями
 car.sellEurRate=car.sellRates.EUR||"";car.sellUsdRate=car.sellRates.USD||"";
 car.status="sold";car.sellDate=new Date().toISOString();
@@ -82,9 +84,11 @@ document.getElementById("import-file").addEventListener("change",function(ev){
 const f=ev.target.files[0];if(!f)return;
 const reader=new FileReader();
 reader.onload=e=>{try{const data=JSON.parse(e.target.result);
-const cars=Array.isArray(data)?data:(data.warehouse||[]);
-if(!Array.isArray(cars)||!cars.length){alert("Файл не содержит данных склада");return}
-showConfirm(`Найдено машин: ${cars.length}. Добавить к текущему складу? (дубликаты по ID будут обновлены)`,()=>{
+const raw=Array.isArray(data)?data:(data.warehouse||[]);
+const cars=(Array.isArray(raw)?raw:[]).map(normalizeCar).filter(Boolean);
+if(!cars.length){alert("Файл не содержит данных склада");return}
+const skipped=(Array.isArray(raw)?raw.length:0)-cars.length;
+showConfirm(`Найдено машин: ${cars.length}${skipped?` (пропущено битых: ${skipped})`:""}. Добавить к текущему складу? (дубликаты по ID будут обновлены)`,()=>{
 cars.forEach(nc=>{const i=S.warehouse.findIndex(c=>c.id===nc.id);
 if(i>=0)S.warehouse[i]=nc;else S.warehouse.push(nc);cloudUpsert(nc)});
 saveWH();render()})}catch(err){alert("Ошибка чтения файла")}};
@@ -138,7 +142,7 @@ return h}
 function carCardHTML(car){
 const cost=carCost(car),exp=S.expandedCar===car.id,selling=S.sellingCarId===car.id,editing=S.editingCarId===car.id;
 const sellR=carSellRub(car),pr=sellR-cost;
-let h=`<div class="wh-card"><div class="wh-card-header" onclick="togExp('${car.id}')">
+let h=`<div class="wh-card"><div class="wh-card-header" onclick="togExp('${esc(car.id)}')">
 <div><div class="wh-car-name">🚗 ${esc(car.name)}<span class="wh-status ${car.status}">${car.status==="stock"?"СКЛАД":"ПРОДАНО"}</span></div>
 <div style="color:#556;font-size:10px;margin-top:2px">${dShort(car.date)}${car.status==="stock"?` · ${daysBetween(car.date,new Date())} дн. на складе`:""}</div></div>
 <div style="text-align:right"><div class="wh-car-cost">${fmt(cost)} ₽</div>
@@ -152,38 +156,40 @@ h+=`<div class="wh-detail" onclick="event.stopPropagation()">
 if(bulkCurs.length){
 h+=`<div style="color:#667;font-size:9px;margin-bottom:6px;letter-spacing:.5px">БЫСТРО ПРИМЕНИТЬ КУРС КО ВСЕМ ПОЗИЦИЯМ:</div>`;
 bulkCurs.forEach(c=>{h+=`<div class="bulk-rate-row"><div class="bulk-rate-field">
-<label class="edit-lbl">${CUR[c].symbol} ${c} / ₽</label>
-<input type="number" class="edit-input" value="${S.bulkRates[c]}" oninput="S.bulkRates['${c}']=this.value"></div>
-<div class="bulk-apply" onclick="bulkApply('${c}')">→ ВСЕМ ${CUR[c].symbol}</div></div>`});
+<label class="edit-lbl">${curInfo(c).symbol} ${esc(c)} / ₽</label>
+<input type="number" class="edit-input" value="${esc(S.bulkRates[c])}" oninput="S.bulkRates['${esc(c)}']=this.value"></div>
+<div class="bulk-apply" onclick="bulkApply('${esc(c)}')">→ ВСЕМ ${curInfo(c).symbol}</div></div>`});
 }
-S.editCarEntries.forEach((e,i)=>{const cm=CUR[e.currency]||CUR.RUB;
-h+=`<div class="edit-entry-card"><div class="edit-entry-title">${e.icon} ${e.label} (${cm.symbol})</div>
+S.editCarEntries.forEach((e,i)=>{const cm=curInfo(e.currency);
+h+=`<div class="edit-entry-card"><div class="edit-entry-title">${esc(e.icon)} ${esc(e.label)} (${cm.symbol})</div>
 <div class="edit-fields">
 <div class="edit-field"><label class="edit-lbl">СУММА ${cm.symbol}</label>
-<input type="number" class="edit-input" value="${e.amount}" oninput="updEditEntry(${i},'amount',this.value)"></div>
+<input type="number" class="edit-input" value="${esc(e.amount)}" oninput="updEditEntry(${i},'amount',this.value)"></div>
 ${e.currency!=="RUB"?`<div class="edit-field"><label class="edit-lbl">КУРС ₽</label>
-<input type="number" class="edit-input" value="${e.rate}" oninput="updEditEntry(${i},'rate',this.value)"></div>`:""}
+<input type="number" class="edit-input" value="${esc(e.rate)}" oninput="updEditEntry(${i},'rate',this.value)"></div>`:""}
 </div></div>`});
+const editCost=totR(S.editCarEntries.map(e=>({...e,amount:parseFloat(e.amount)||0})),carRates(car));
+const editDiff=editCost-cost;
 h+=`<div class="edit-cost-preview"><span class="ecp-lbl">СЕБЕСТОИМОСТЬ</span>
-<div style="text-align:right"><div class="ecp-val" id="edit-cost-val">${fmt(cost)} ₽</div>
-<div id="edit-cost-diff" style="font-size:9px;color:#556">без изменений</div></div></div>
+<div style="text-align:right"><div class="ecp-val" id="edit-cost-val">${fmt(editCost)} ₽</div>
+<div id="edit-cost-diff" style="font-size:9px;color:${editDiff>0?"#e74c3c":editDiff<0?"#27ae60":"#556"}">${editDiff===0?"без изменений":(editDiff>0?"+":"")+fmt(editDiff)+" ₽ к исходной"}</div></div></div>
 <div style="display:flex;gap:8px">
-<div class="btn-action btn-green" style="flex:1;margin:0;font-size:11px;padding:11px 0" onclick="saveCarEdit('${car.id}')">✅ СОХРАНИТЬ</div>
+<div class="btn-action btn-green" style="flex:1;margin:0;font-size:11px;padding:11px 0" onclick="saveCarEdit('${esc(car.id)}')">✅ СОХРАНИТЬ</div>
 <div class="btn-action btn-outline" style="flex:0 0 auto;margin:0;padding:11px 16px;font-size:11px" onclick="cancelCarEdit()">✕ ОТМЕНА</div></div></div>`;
 }else if(exp){
 // ===== ОБЫЧНЫЙ ПРОСМОТР =====
 const cr=carRates(car);
 h+=`<div class="wh-detail">
 <div style="color:#556;font-size:10px;font-weight:600;margin-bottom:8px;letter-spacing:1px">РАЗБИВКА РАСХОДОВ (курс на дату оплаты)</div>`;
-car.entries.forEach(e=>{const cm=CUR[e.currency]||CUR.RUB;const r=entryRate(e,cr);
+car.entries.forEach(e=>{const cm=curInfo(e.currency);const r=entryRate(e,cr);
 const rv=entryRub(e,cr);
-h+=`<div class="wh-detail-row"><span class="wh-detail-lbl">${e.icon} ${e.label}</span>
-<span class="wh-detail-val">${fmt(e.amount)} ${cm.symbol}${e.currency!=="RUB"?" × "+fmtRate(r)+" = "+fmt(rv)+" ₽":""}</span></div>`});
+h+=`<div class="wh-detail-row"><span class="wh-detail-lbl">${esc(e.icon)} ${esc(e.label)}</span>
+<span class="wh-detail-val">${esc(fmt(e.amount))} ${cm.symbol}${e.currency!=="RUB"?" × "+(r?fmtRate(r):"⚠ нет курса")+" = "+fmt(rv)+" ₽":""}</span></div>`});
 h+=`<div class="wh-detail-row" style="border-top:2px solid var(--br2);padding-top:8px;margin-top:4px">
 <span style="color:var(--gold);font-size:12px;font-weight:700">СЕБЕСТОИМОСТЬ</span>
 <span style="color:var(--gold);font-size:14px;font-weight:700;font-family:'Oswald',sans-serif">${fmt(cost)} ₽</span></div>`;
 if(car.status==="sold"){const mg=cost>0?(pr/cost)*100:0,ip=pr>=0;
-const sCur=CUR[car.sellCurrency]||CUR.RUB;
+const sCur=curInfo(car.sellCurrency);
 h+=`<div class="wh-detail-row"><span class="wh-detail-lbl">💰 Продажа</span>
 <span class="wh-detail-val">${fmt(parseFloat(car.sellPrice)||0)} ${sCur.symbol}${car.sellCurrency!=="RUB"?" → "+fmt(sellR)+" ₽":""}</span></div>
 ${car.sellCurrency!=="RUB"?`<div class="wh-detail-row"><span class="wh-detail-lbl">📈 Курс продажи</span>
@@ -193,25 +199,25 @@ ${car.sellCurrency!=="RUB"?`<div class="wh-detail-row"><span class="wh-detail-lb
 ${car.sellDate?`<div class="wh-detail-row"><span class="wh-detail-lbl">📅 Продана</span>
 <span class="wh-detail-val">${dShort(car.sellDate)} · стояла ${daysBetween(car.date,car.sellDate)} дн.</span></div>`:""}`}
 h+=`<div class="wh-actions">`;
-if(car.status==="stock"){h+=`<div class="btn-action btn-green" onclick="event.stopPropagation();startSell('${car.id}')">💰 ПРОДАТЬ</div>`}
-h+=`<div class="btn-action btn-blue" onclick="event.stopPropagation();startCarEdit('${car.id}')">✏️ КУРСЫ</div>`;
-if(car.status==="stock"){h+=`<div class="btn-action btn-outline" style="flex:0 0 auto;padding:10px 14px" onclick="event.stopPropagation();cpToCalc('${car.id}')">📋</div>`}
-else{h+=`<div class="btn-action btn-outline" onclick="event.stopPropagation();retStock('${car.id}')">↩️ ВЕРНУТЬ</div>`}
-h+=`<div class="btn-action btn-yellow" style="flex:0 0 auto;padding:10px 14px" onclick="event.stopPropagation();carReceipt('${car.id}')">🧾</div>
-<div class="btn-action btn-red" style="flex:0 0 auto;padding:10px 14px" onclick="event.stopPropagation();delCar('${car.id}')">🗑</div></div>`;
+if(car.status==="stock"){h+=`<div class="btn-action btn-green" onclick="event.stopPropagation();startSell('${esc(car.id)}')">💰 ПРОДАТЬ</div>`}
+h+=`<div class="btn-action btn-blue" onclick="event.stopPropagation();startCarEdit('${esc(car.id)}')">✏️ КУРСЫ</div>`;
+if(car.status==="stock"){h+=`<div class="btn-action btn-outline" style="flex:0 0 auto;padding:10px 14px" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋</div>`}
+else{h+=`<div class="btn-action btn-outline" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
+h+=`<div class="btn-action btn-yellow" style="flex:0 0 auto;padding:10px 14px" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">🧾</div>
+<div class="btn-action btn-red" style="flex:0 0 auto;padding:10px 14px" onclick="event.stopPropagation();delCar('${esc(car.id)}')">🗑</div></div>`;
 if(S.carReceipts[car.id])h+=`<div class="saved-preview"><p>✅ ЧЕК СОХРАНЁН — ЗАЖМИТЕ ДЛЯ КОПИРОВАНИЯ</p><img src="${S.carReceipts[car.id]}" alt="Чек"></div>`;
 h+=`</div>`}
 
 if(selling){h+=`<div class="wh-sell-form" onclick="event.stopPropagation()">
 <div style="color:#888;font-size:11px;font-weight:600;margin-bottom:8px">ОФОРМИТЬ ПРОДАЖУ</div>
-<input type="number" class="wh-sell-input" placeholder="Цена продажи" value="${S.sellFormPrice}" oninput="S.sellFormPrice=this.value">
+<input type="number" class="wh-sell-input" placeholder="Цена продажи" value="${esc(S.sellFormPrice)}" oninput="S.sellFormPrice=this.value">
 <div class="profit-curr-row">
-${[...new Set(["RUB",...S.activeCur,S.sellFormCurr])].map(c=>`<div class="pcb ${S.sellFormCurr===c?"a-"+CUR[c].cls:""}"
-onclick="S.sellFormCurr='${c}';S.sellFormRate=S.rates['${c}']||'';render()">${CUR[c].symbol} ${c}</div>`).join("")}</div>
-${S.sellFormCurr!=="RUB"?`<label class="sell-rate-lbl">КУРС НА ДАТУ ПРОДАЖИ ${CUR[S.sellFormCurr].symbol}/₽</label>
-<input type="number" class="wh-sell-input" value="${S.sellFormRate}" oninput="S.sellFormRate=this.value">`:""}
+${[...new Set(["RUB",...S.activeCur,S.sellFormCurr])].map(c=>`<div class="pcb ${S.sellFormCurr===c?"a-"+curInfo(c).cls:""}"
+onclick="S.sellFormCurr='${esc(c)}';S.sellFormRate=S.rates['${esc(c)}']||'';render()">${curInfo(c).symbol} ${esc(c)}</div>`).join("")}</div>
+${S.sellFormCurr!=="RUB"?`<label class="sell-rate-lbl">КУРС НА ДАТУ ПРОДАЖИ ${curInfo(S.sellFormCurr).symbol}/₽</label>
+<input type="number" class="wh-sell-input" value="${esc(S.sellFormRate)}" oninput="S.sellFormRate=this.value">`:""}
 <div style="display:flex;gap:8px;margin-top:4px">
-<div class="btn-action btn-green" style="flex:1;margin:0" onclick="doSell('${car.id}')">✅ ПРОДАТЬ</div>
+<div class="btn-action btn-green" style="flex:1;margin:0" onclick="doSell('${esc(car.id)}')">✅ ПРОДАТЬ</div>
 <div class="btn-action btn-outline" style="flex:0 0 auto;margin:0;padding:10px 16px" onclick="cancelSell()">✕</div></div></div>`}
 h+=`</div>`;
 return h}

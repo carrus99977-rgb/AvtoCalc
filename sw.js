@@ -1,5 +1,5 @@
 // АвтоКальк — service worker: приложение работает без интернета
-const CACHE = "avtokalk-v6";
+const CACHE = "avtokalk-v7";
 const FILES = [
   "./",
   "./index.html",
@@ -34,10 +34,17 @@ self.addEventListener("activate", e => {
 // при ошибке должны падать честно, а не получать HTML со статусом 200.
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+  // Cross-origin (курсы ЦБ, Supabase, CDN, шрифты) — мимо кэша: живая сеть,
+  // при ошибке падают честно, не подменяются протухшим кэшем со статусом 200.
+  if (new URL(e.request.url).origin !== self.location.origin) return;
   e.respondWith(
     fetch(e.request).then(resp => {
-      const copy = resp.clone();
-      caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+      // в кэш только успешные ответы (resp.ok=false и для 404/500, и для opaque),
+      // чтобы страница ошибки не затёрла рабочий файл app shell
+      if (resp.ok) {
+        const copy = resp.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+      }
       return resp;
     }).catch(() => caches.match(e.request).then(r => {
       if (r) return r;
