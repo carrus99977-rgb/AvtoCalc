@@ -120,7 +120,8 @@ const avgAge=stk.length?Math.round(stk.reduce((s,c)=>s+daysBetween(c.date,new Da
 let h=`<div class="section-divider" id="wh-section"><span>🏭 Склад (${stk.length})</span></div>
 ${cloudBoxHTML()}<div class="backup-row">
 <div class="backup-btn" onclick="exportData()">💾 ЭКСПОРТ БАЗЫ</div>
-<div class="backup-btn" onclick="importData()">📥 ИМПОРТ БАЗЫ</div></div>`;
+<div class="backup-btn" onclick="importData()">📥 ИМПОРТ БАЗЫ</div>
+<div class="backup-btn" onclick="exportCSV()">📊 EXCEL</div></div>`;
 if(stk.length)h+=`<div class="stats-bar">
 <div class="stat-card"><div class="stat-num gold">${fmt(frozen)}</div><div class="stat-lbl">ЗАМОРОЖЕНО ₽</div></div>
 <div class="stat-card"><div class="stat-num blue">${avgAge}</div><div class="stat-lbl">СР. ДНЕЙ НА СКЛАДЕ</div></div></div>`;
@@ -204,6 +205,7 @@ h+=`<div class="btn-action btn-blue" title="Изменить курсы и су�
 if(car.status==="stock"){h+=`<div class="btn-action btn-outline" style="flex:0 0 auto;padding:10px 14px" data-tip="В калькулятор" aria-label="Скопировать в калькулятор" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋</div>`}
 else{h+=`<div class="btn-action btn-outline" title="Вернуть на склад" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
 h+=`<div class="btn-action btn-yellow tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Сохранить чек" aria-label="Сохранить чек (картинку)" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">🧾</div>
+<div class="btn-action btn-blue tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Поделиться чеком" aria-label="Поделиться чеком" onclick="event.stopPropagation();carShare('${esc(car.id)}')">📤</div>
 <div class="btn-action btn-red tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Удалить машину" aria-label="Удалить машину" onclick="event.stopPropagation();delCar('${esc(car.id)}')">🗑</div></div>`;
 if(S.carReceipts[car.id])h+=`<div class="saved-preview"><p>✅ ЧЕК СОХРАНЁН — ЗАЖМИТЕ ДЛЯ КОПИРОВАНИЯ</p><img src="${S.carReceipts[car.id]}" alt="Чек"></div>`;
 h+=`</div>`}

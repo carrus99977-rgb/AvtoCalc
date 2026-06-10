@@ -20,6 +20,7 @@ h+=`<div class="r-dash"></div><div class="r-footer">СПАСИБО ЗА РАСЧ
 <svg class="torn-edge" width="100%" height="16" viewBox="0 0 380 16" preserveAspectRatio="none">
 <path d="${Array.from({length:38},(_,i)=>`${i===0?"M":"L"}${i*10},${i%2===0?0:12}`).join(" ")} L380,0 L380,16 L0,16 Z" fill="#fef9e7"/></svg>
 <div class="btn-save" onclick="saveCalcReceipt()">💾 СОХРАНИТЬ ЧЕК</div>
+<div class="btn-save btn-share" onclick="shareCalcReceipt()">📤 ПОДЕЛИТЬСЯ ЧЕКОМ</div>
 ${S.receiptImage?`<div class="saved-preview" id="saved-img"><p>✅ ЗАЖМИТЕ КАРТИНКУ ДЛЯ СОХРАНЕНИЯ</p><img src="${S.receiptImage}" alt="Чек"></div>`:""}</div>`;
 return h}
 
@@ -69,16 +70,42 @@ const sn=name?name.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s-]/g,"").replace(/\s+/g,"
 a.download="Чек_"+sn+"_"+new Date().toLocaleDateString("ru-RU").replace(/\./g,"-")+".png";
 a.href=dataUrl;document.body.appendChild(a);a.click();document.body.removeChild(a)}catch(_){}}
 
-function saveCalcReceipt(){
+function buildCalcReceiptPNG(){
 const sp=parseFloat(S.sellPrice)||0;
-const du=drawReceiptPNG({name:S.carName.trim(),rates:S.rates,entries:S.entries,
-sell:sp>0?{price:S.sellPrice,currency:S.sellCurrency,rates:S.rates}:null});
+return drawReceiptPNG({name:S.carName.trim(),rates:S.rates,entries:S.entries,
+sell:sp>0?{price:S.sellPrice,currency:S.sellCurrency,rates:S.rates}:null})}
+function buildCarReceiptPNG(car){
+return drawReceiptPNG({name:car.name,rates:carRates(car),entries:car.entries,
+sell:car.status==="sold"&&parseFloat(car.sellPrice)?{price:car.sellPrice,currency:car.sellCurrency,
+rates:carSellRates(car)}:null})}
+
+// ===== ШАРИНГ ЧЕКА =====
+// dataURL → Blob синхронно (через fetch потерялся бы user gesture для navigator.share)
+function dataUrlToBlob(du){const b=du.split(",")[1];const bin=atob(b);
+const u8=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);
+return new Blob([u8],{type:"image/png"})}
+function shareReceipt(dataUrl,name){
+try{
+const sn=name?name.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s-]/g,"").replace(/\s+/g,"_"):"авто";
+const file=new File([dataUrlToBlob(dataUrl)],"Чек_"+sn+".png",{type:"image/png"});
+if(navigator.canShare&&navigator.canShare({files:[file]})){
+// отмена пользователем (AbortError) — не ошибка; прочие сбои — скачиваем как запасной вариант
+navigator.share({files:[file]}).catch(err=>{if(!err||err.name!=="AbortError")downloadPNG(dataUrl,name)});
+return}
+}catch(e){}
+// устройство не умеет делиться файлами — просто скачиваем
+downloadPNG(dataUrl,name)}
+
+function saveCalcReceipt(){
+const du=buildCalcReceiptPNG();
 S.receiptImage=du;downloadPNG(du,S.carName.trim());render();
 setTimeout(()=>document.getElementById("saved-img")?.scrollIntoView({behavior:"smooth"}),100)}
+function shareCalcReceipt(){shareReceipt(buildCalcReceiptPNG(),S.carName.trim())}
 
 function carReceipt(id){
 const car=S.warehouse.find(c=>c.id===id);if(!car)return;
-const du=drawReceiptPNG({name:car.name,rates:carRates(car),entries:car.entries,
-sell:car.status==="sold"&&parseFloat(car.sellPrice)?{price:car.sellPrice,currency:car.sellCurrency,
-rates:carSellRates(car)}:null});
+const du=buildCarReceiptPNG(car);
 S.carReceipts[id]=du;S.expandedCar=id;downloadPNG(du,car.name);render()}
+function carShare(id){
+const car=S.warehouse.find(c=>c.id===id);if(!car)return;
+shareReceipt(buildCarReceiptPNG(car),car.name)}

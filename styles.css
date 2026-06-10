@@ -189,6 +189,7 @@ background:var(--br2);color:var(--t2);border:1px solid var(--key-br);font-family
 .r-prb{text-align:center;margin-top:4px;font-family:'Oswald',sans-serif;font-size:22px;font-weight:700}
 .r-prb.pos{color:#1e8449}.r-prb.neg{color:#922b21}
 .btn-save{margin-top:12px;padding:14px 0;text-align:center;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;letter-spacing:2px;background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;font-family:'Oswald',sans-serif;text-transform:uppercase;transition:all .15s;box-shadow:0 4px 16px rgba(39,174,96,.3)}
+.btn-save.btn-share{margin-top:8px;background:linear-gradient(135deg,#3498db,#2471a3);box-shadow:0 4px 16px rgba(52,152,219,.3)}
 .saved-preview{margin-top:12px;text-align:center;animation:fadeIn .3s ease}
 .saved-preview p{color:var(--ok2);font-size:11px;margin-bottom:8px;font-weight:600;letter-spacing:1px}
 .saved-preview img{width:100%;border-radius:8px;border:2px solid #27ae60;box-shadow:0 4px 16px rgba(0,0,0,.4)}
