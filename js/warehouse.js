@@ -199,12 +199,12 @@ ${car.sellCurrency!=="RUB"?`<div class="wh-detail-row"><span class="wh-detail-lb
 ${car.sellDate?`<div class="wh-detail-row"><span class="wh-detail-lbl">📅 Продана</span>
 <span class="wh-detail-val">${dShort(car.sellDate)} · стояла ${daysBetween(car.date,car.sellDate)} дн.</span></div>`:""}`}
 h+=`<div class="wh-actions">`;
-if(car.status==="stock"){h+=`<div class="btn-action btn-green" onclick="event.stopPropagation();startSell('${esc(car.id)}')">💰 ПРОДАТЬ</div>`}
-h+=`<div class="btn-action btn-blue" onclick="event.stopPropagation();startCarEdit('${esc(car.id)}')">✏️ КУРСЫ</div>`;
-if(car.status==="stock"){h+=`<div class="btn-action btn-outline" style="flex:0 0 auto;padding:10px 14px" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋</div>`}
-else{h+=`<div class="btn-action btn-outline" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
-h+=`<div class="btn-action btn-yellow" style="flex:0 0 auto;padding:10px 14px" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">🧾</div>
-<div class="btn-action btn-red" style="flex:0 0 auto;padding:10px 14px" onclick="event.stopPropagation();delCar('${esc(car.id)}')">🗑</div></div>`;
+if(car.status==="stock"){h+=`<div class="btn-action btn-green" title="Оформить продажу" onclick="event.stopPropagation();startSell('${esc(car.id)}')">💰 ПРОДАТЬ</div>`}
+h+=`<div class="btn-action btn-blue" title="Изменить курсы и суммы" onclick="event.stopPropagation();startCarEdit('${esc(car.id)}')">✏️ КУРСЫ</div>`;
+if(car.status==="stock"){h+=`<div class="btn-action btn-outline" style="flex:0 0 auto;padding:10px 14px" data-tip="В калькулятор" aria-label="Скопировать в калькулятор" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋</div>`}
+else{h+=`<div class="btn-action btn-outline" title="Вернуть на склад" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
+h+=`<div class="btn-action btn-yellow tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Сохранить чек" aria-label="Сохранить чек (картинку)" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">🧾</div>
+<div class="btn-action btn-red tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Удалить машину" aria-label="Удалить машину" onclick="event.stopPropagation();delCar('${esc(car.id)}')">🗑</div></div>`;
 if(S.carReceipts[car.id])h+=`<div class="saved-preview"><p>✅ ЧЕК СОХРАНЁН — ЗАЖМИТЕ ДЛЯ КОПИРОВАНИЯ</p><img src="${S.carReceipts[car.id]}" alt="Чек"></div>`;
 h+=`</div>`}
 

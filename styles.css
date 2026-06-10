@@ -237,3 +237,22 @@ color:var(--t1);font-size:13px;font-family:'JetBrains Mono',monospace;outline:no
 background:var(--card);color:var(--t4);border:1px solid var(--br);letter-spacing:.5px}
 .sort-chip.active{background:var(--br2);color:var(--t1);border-color:var(--key-br)}
 .sort-chip:active{transform:scale(.93)}
+
+/* ===== Подсветка кнопок карточки при наведении ===== */
+@media (hover:hover){
+.wh-actions .btn-action{transition:transform .12s ease,filter .12s ease,box-shadow .12s ease,border-color .12s ease}
+.wh-actions .btn-action:hover{transform:translateY(-2px);filter:brightness(1.12)}
+.wh-actions .btn-yellow:hover{box-shadow:0 6px 18px rgba(232,212,77,.45)}
+.wh-actions .btn-red:hover{box-shadow:0 6px 18px rgba(231,76,60,.45);filter:brightness(1.18)}
+.wh-actions .btn-green:hover{box-shadow:0 6px 18px rgba(39,174,96,.45)}
+.wh-actions .btn-blue:hover{box-shadow:0 6px 18px rgba(52,152,219,.45)}
+.wh-actions .btn-outline:hover{border-color:var(--gold);color:var(--t0);box-shadow:0 6px 18px rgba(0,0,0,.25)}
+/* Мгновенная подсказка для иконочных кнопок (📋 🧾 🗑) */
+.wh-actions .btn-action[data-tip]{position:relative}
+.wh-actions .btn-action[data-tip]:hover::after{
+content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+background:var(--deep);color:var(--t0);border:1px solid var(--br2);padding:5px 9px;border-radius:7px;
+font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.3px;
+white-space:nowrap;text-transform:none;z-index:60;box-shadow:0 6px 18px rgba(0,0,0,.5);pointer-events:none}
+.wh-actions .btn-action.tip-end[data-tip]:hover::after{left:auto;right:0;transform:none}
+}

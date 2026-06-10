@@ -10,12 +10,9 @@ const CATS=[
 const CUR={
 RUB:{symbol:"₽",cls:"rub",label:"РУБЛЬ",cbr:null},
 EUR:{symbol:"€",cls:"eur",label:"ЕВРО",cbr:"EUR"},
-USD:{symbol:"$",cls:"usd",label:"ДОЛЛАР",cbr:"USD"},
-CNY:{symbol:"¥",cls:"cny",label:"ЮАНЬ",cbr:"CNY"},
-KRW:{symbol:"₩",cls:"krw",label:"ВОНА",cbr:"KRW"},
-JPY:{symbol:"JP¥",cls:"jpy",label:"ИЕНА",cbr:"JPY"}};
-const DEFAULT_RATES={EUR:"83",USD:"72",CNY:"10.6",KRW:"0.047",JPY:"0.45"};
-const DEFAULT_ACTIVE=["EUR","USD","CNY"];
+USD:{symbol:"$",cls:"usd",label:"ДОЛЛАР",cbr:"USD"}};
+const DEFAULT_RATES={EUR:"83",USD:"72"};
+const DEFAULT_ACTIVE=["EUR","USD"];
 
 let S={carName:"",rates:{...DEFAULT_RATES},activeCur:[...DEFAULT_ACTIVE],entries:[],curCat:0,display:"0",
 showReceipt:false,showSettings:true,showProfit:true,sellPrice:"",sellCurrency:"RUB",receiptImage:null,
