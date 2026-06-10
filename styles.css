@@ -193,3 +193,26 @@ background:var(--br2);color:var(--t2);border:1px solid var(--key-br);font-family
 .saved-preview p{color:var(--ok2);font-size:11px;margin-bottom:8px;font-weight:600;letter-spacing:1px}
 .saved-preview img{width:100%;border-radius:8px;border:2px solid #27ae60;box-shadow:0 4px 16px rgba(0,0,0,.4)}
 .torn-edge{display:block}
+
+/* ===== Мультивалютность ===== */
+:root{--cur-cny:#f5cba7;--cur-krw:#d7bde2;--cur-jpy:#a3e4d7}
+body.light{--cur-cny:#9c640c;--cur-krw:#6c3483;--cur-jpy:#117a65}
+.rate-label.eur{color:var(--cur-eur)}.rate-label.usd{color:var(--cur-usd)}
+.rate-label.cny{color:var(--cur-cny)}.rate-label.krw{color:var(--cur-krw)}.rate-label.jpy{color:var(--cur-jpy)}
+.rate-input.cny{color:var(--cur-cny)}.rate-input.krw{color:var(--cur-krw)}.rate-input.jpy{color:var(--cur-jpy)}
+.entry-amount.cny{color:var(--cur-cny)}.entry-amount.krw{color:var(--cur-krw)}.entry-amount.jpy{color:var(--cur-jpy)}
+.btn-currency.cny{background:#fdebd0;color:#9c640c;border:2px solid #9c640c}
+.btn-currency.krw{background:#e8daef;color:#6c3483;border:2px solid #6c3483}
+.btn-currency.jpy{background:#d1f2eb;color:#117a65;border:2px solid #117a65}
+.pcb.a-cny{background:#fdebd0;color:#9c640c;border-color:#9c640c}
+.pcb.a-krw{background:#e8daef;color:#6c3483;border-color:#6c3483}
+.pcb.a-jpy{background:#d1f2eb;color:#117a65;border-color:#117a65}
+.currency-row{flex-wrap:wrap}
+.btn-currency{flex:1 1 30%;min-width:30%}
+.profit-curr-row{flex-wrap:wrap}
+.pcb{flex:1 1 21%;min-width:70px}
+.cur-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.cur-chip{padding:5px 10px;border-radius:8px;font-size:10px;font-weight:600;cursor:pointer;
+background:var(--input);color:var(--t4);border:1px solid var(--br);white-space:nowrap}
+.cur-chip.active{background:var(--gold);color:#1a1a2e;border-color:var(--gold)}
+.cur-chip:active{transform:scale(.93)}

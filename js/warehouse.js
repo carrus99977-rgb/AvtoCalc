@@ -2,41 +2,52 @@
 function addToWH(){if(!S.carName.trim()){alert("Введите название авто");return}
 if(S.entries.length===0){alert("Добавьте хотя бы одну позицию");return}
 S.warehouse.unshift({id:uid(),name:S.carName.trim(),date:new Date().toISOString(),
-eurRate:S.eurRate,usdRate:S.usdRate,entries:JSON.parse(JSON.stringify(S.entries)),
-status:"stock",sellPrice:"",sellCurrency:"RUB",sellDate:null,sellEurRate:"",sellUsdRate:""});
+rates:{...S.rates},eurRate:S.rates.EUR||"",usdRate:S.rates.USD||"",
+entries:JSON.parse(JSON.stringify(S.entries)),
+status:"stock",sellPrice:"",sellCurrency:"RUB",sellDate:null,sellRates:null,sellEurRate:"",sellUsdRate:""});
 saveWH();cloudUpsert(S.warehouse[0]);
 S.carName="";S.entries=[];S.display="0";S.curCat=0;S.showReceipt=false;S.receiptImage=null;S.sellPrice="";
 S.expandedCar=S.warehouse[0].id;saveDraft();render();
 setTimeout(()=>document.getElementById("wh-section")?.scrollIntoView({behavior:"smooth"}),150)}
 
 function startSell(id){S.sellingCarId=id;S.editingCarId=null;S.sellFormPrice="";S.sellFormCurr="RUB";
-S.sellFormEur=S.eurRate;S.sellFormUsd=S.usdRate;render()}
+S.sellFormRate="";render()}
 function cancelSell(){S.sellingCarId=null;render()}
 function doSell(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 if(!parseFloat(S.sellFormPrice)){alert("Введите цену продажи");return}
 car.sellPrice=S.sellFormPrice;car.sellCurrency=S.sellFormCurr;
-car.sellEurRate=S.sellFormEur||S.eurRate;car.sellUsdRate=S.sellFormUsd||S.usdRate;
+car.sellRates={};
+if(S.sellFormCurr!=="RUB")car.sellRates[S.sellFormCurr]=S.sellFormRate||S.rates[S.sellFormCurr]||"";
+// зеркала для совместимости со старыми версиями
+car.sellEurRate=car.sellRates.EUR||"";car.sellUsdRate=car.sellRates.USD||"";
 car.status="sold";car.sellDate=new Date().toISOString();
 S.sellingCarId=null;saveWH();cloudUpsert(car);render()}
 function delCar(id){showConfirm("Удалить машину из базы?",()=>{S.warehouse=S.warehouse.filter(c=>c.id!==id);cloudDelete(id);
 if(S.expandedCar===id)S.expandedCar=null;delete S.carReceipts[id];saveWH();render()})}
 function retStock(id){showConfirm("Вернуть машину на склад? Данные продажи будут стёрты.",()=>{
 const car=S.warehouse.find(c=>c.id===id);if(!car)return;
-car.status="stock";car.sellPrice="";car.sellCurrency="RUB";car.sellDate=null;car.sellEurRate="";car.sellUsdRate="";
+car.status="stock";car.sellPrice="";car.sellCurrency="RUB";car.sellDate=null;
+car.sellRates=null;car.sellEurRate="";car.sellUsdRate="";
 saveWH();cloudUpsert(car);render()})}
 function togExp(id){S.expandedCar=S.expandedCar===id?null:id;S.sellingCarId=null;
 if(S.editingCarId!==id)S.editingCarId=null;render()}
 function cpToCalc(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
-S.carName=car.name;S.eurRate=car.eurRate;S.usdRate=car.usdRate;
+S.carName=car.name;
+const cr=carRates(car);Object.keys(cr).forEach(c=>{if(cr[c])S.rates[c]=cr[c]});
+car.entries.forEach(e=>{if(e.currency!=="RUB"&&CUR[e.currency]&&!S.activeCur.includes(e.currency))S.activeCur.push(e.currency)});
+S.activeCur=Object.keys(CUR).filter(k=>S.activeCur.includes(k));
 S.entries=JSON.parse(JSON.stringify(car.entries));S.display="0";S.curCat=0;S.showReceipt=false;S.sellPrice="";
 saveDraft();render();window.scrollTo({top:0,behavior:"smooth"})}
 
 // ===== CAR EDIT MODE (per-entry rates and amounts) =====
 function startCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 S.editingCarId=id;S.sellingCarId=null;S.expandedCar=id;
+const cr=carRates(car);
 S.editCarEntries=car.entries.map(e=>({...e,
-rate:e.rate||(e.currency==="EUR"?car.eurRate:e.currency==="USD"?car.usdRate:"")}));
-S.bulkEur=S.eurRate;S.bulkUsd=S.usdRate;render()}
+rate:e.rate||(e.currency==="RUB"?"":(cr[e.currency]||""))}));
+S.bulkRates={};S.editCarEntries.forEach(e=>{
+if(e.currency!=="RUB"&&!(e.currency in S.bulkRates))S.bulkRates[e.currency]=S.rates[e.currency]||cr[e.currency]||""});
+render()}
 function cancelCarEdit(){S.editingCarId=null;S.editCarEntries=null;render()}
 function saveCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car||!S.editCarEntries)return;
 for(const e of S.editCarEntries){if(!(parseFloat(e.amount)>0)){alert("Проверьте суммы — есть пустые или нулевые");return}
@@ -47,7 +58,7 @@ function updEditEntry(i,field,val){if(!S.editCarEntries)return;S.editCarEntries[
 function updEditCost(){if(!S.editCarEntries)return;
 const car=S.warehouse.find(c=>c.id===S.editingCarId);if(!car)return;
 const entries=S.editCarEntries.map(e=>({...e,amount:parseFloat(e.amount)||0}));
-const cost=totR(entries,car.eurRate,car.usdRate);
+const cost=totR(entries,carRates(car));
 const el=document.getElementById("edit-cost-val");if(el)el.textContent=fmt(cost)+" ₽";
 // разница с исходной
 const orig=carCost(car);const diff=cost-orig;
@@ -55,7 +66,7 @@ const del=document.getElementById("edit-cost-diff");
 if(del){del.textContent=(diff===0?"без изменений":(diff>0?"+":"")+fmt(diff)+" ₽ к исходной");
 del.style.color=diff>0?"#e74c3c":diff<0?"#27ae60":"#556"}}
 function bulkApply(curr){if(!S.editCarEntries)return;
-const v=curr==="EUR"?S.bulkEur:S.bulkUsd;if(!(parseFloat(v)>0)){alert("Введите курс");return}
+const v=S.bulkRates[curr];if(!(parseFloat(v)>0)){alert("Введите курс");return}
 S.editCarEntries.forEach(e=>{if(e.currency===curr)e.rate=v});render()}
 
 // ===== BACKUP =====
@@ -111,22 +122,17 @@ ${car.status==="sold"?`<div style="color:${pr>=0?"#27ae60":"#e74c3c"};font-size:
 
 if(exp&&editing&&S.editCarEntries){
 // ===== РЕЖИМ РЕДАКТИРОВАНИЯ КУРСОВ И СУММ =====
-const hasEur=S.editCarEntries.some(e=>e.currency==="EUR");
-const hasUsd=S.editCarEntries.some(e=>e.currency==="USD");
+const bulkCurs=Object.keys(S.bulkRates);
 h+=`<div class="wh-detail" onclick="event.stopPropagation()">
 <div style="color:var(--gold);font-size:11px;font-weight:700;margin-bottom:10px;letter-spacing:1px">✏️ РЕДАКТИРОВАНИЕ — КУРСЫ ПО ФАКТУ ОПЛАТЫ</div>`;
-if(hasEur||hasUsd){
+if(bulkCurs.length){
 h+=`<div style="color:#667;font-size:9px;margin-bottom:6px;letter-spacing:.5px">БЫСТРО ПРИМЕНИТЬ КУРС КО ВСЕМ ПОЗИЦИЯМ:</div>`;
-if(hasEur)h+=`<div class="bulk-rate-row"><div class="bulk-rate-field">
-<label class="edit-lbl">€ EUR / ₽</label>
-<input type="number" class="edit-input" value="${S.bulkEur}" oninput="S.bulkEur=this.value"></div>
-<div class="bulk-apply" onclick="bulkApply('EUR')">→ ВСЕМ €</div></div>`;
-if(hasUsd)h+=`<div class="bulk-rate-row"><div class="bulk-rate-field">
-<label class="edit-lbl">$ USD / ₽</label>
-<input type="number" class="edit-input" value="${S.bulkUsd}" oninput="S.bulkUsd=this.value"></div>
-<div class="bulk-apply" onclick="bulkApply('USD')">→ ВСЕМ $</div></div>`;
+bulkCurs.forEach(c=>{h+=`<div class="bulk-rate-row"><div class="bulk-rate-field">
+<label class="edit-lbl">${CUR[c].symbol} ${c} / ₽</label>
+<input type="number" class="edit-input" value="${S.bulkRates[c]}" oninput="S.bulkRates['${c}']=this.value"></div>
+<div class="bulk-apply" onclick="bulkApply('${c}')">→ ВСЕМ ${CUR[c].symbol}</div></div>`});
 }
-S.editCarEntries.forEach((e,i)=>{const cm=CUR[e.currency];
+S.editCarEntries.forEach((e,i)=>{const cm=CUR[e.currency]||CUR.RUB;
 h+=`<div class="edit-entry-card"><div class="edit-entry-title">${e.icon} ${e.label} (${cm.symbol})</div>
 <div class="edit-fields">
 <div class="edit-field"><label class="edit-lbl">СУММА ${cm.symbol}</label>
@@ -142,12 +148,13 @@ h+=`<div class="edit-cost-preview"><span class="ecp-lbl">СЕБЕСТОИМОС�
 <div class="btn-action btn-outline" style="flex:0 0 auto;margin:0;padding:11px 16px;font-size:11px" onclick="cancelCarEdit()">✕ ОТМЕНА</div></div></div>`;
 }else if(exp){
 // ===== ОБЫЧНЫЙ ПРОСМОТР =====
+const cr=carRates(car);
 h+=`<div class="wh-detail">
 <div style="color:#556;font-size:10px;font-weight:600;margin-bottom:8px;letter-spacing:1px">РАЗБИВКА РАСХОДОВ (курс на дату оплаты)</div>`;
-car.entries.forEach(e=>{const cm=CUR[e.currency];const r=entryRate(e,car.eurRate,car.usdRate);
-const rv=entryRub(e,car.eurRate,car.usdRate);
+car.entries.forEach(e=>{const cm=CUR[e.currency]||CUR.RUB;const r=entryRate(e,cr);
+const rv=entryRub(e,cr);
 h+=`<div class="wh-detail-row"><span class="wh-detail-lbl">${e.icon} ${e.label}</span>
-<span class="wh-detail-val">${fmt(e.amount)} ${cm.symbol}${e.currency!=="RUB"?" × "+fmtD(r,2)+" = "+fmt(rv)+" ₽":""}</span></div>`});
+<span class="wh-detail-val">${fmt(e.amount)} ${cm.symbol}${e.currency!=="RUB"?" × "+fmtRate(r)+" = "+fmt(rv)+" ₽":""}</span></div>`});
 h+=`<div class="wh-detail-row" style="border-top:2px solid var(--br2);padding-top:8px;margin-top:4px">
 <span style="color:var(--gold);font-size:12px;font-weight:700">СЕБЕСТОИМОСТЬ</span>
 <span style="color:var(--gold);font-size:14px;font-weight:700;font-family:'Oswald',sans-serif">${fmt(cost)} ₽</span></div>`;
@@ -156,7 +163,7 @@ const sCur=CUR[car.sellCurrency]||CUR.RUB;
 h+=`<div class="wh-detail-row"><span class="wh-detail-lbl">💰 Продажа</span>
 <span class="wh-detail-val">${fmt(parseFloat(car.sellPrice)||0)} ${sCur.symbol}${car.sellCurrency!=="RUB"?" → "+fmt(sellR)+" ₽":""}</span></div>
 ${car.sellCurrency!=="RUB"?`<div class="wh-detail-row"><span class="wh-detail-lbl">📈 Курс продажи</span>
-<span class="wh-detail-val">${car.sellCurrency==="EUR"?(car.sellEurRate||car.eurRate)+" ₽/€":(car.sellUsdRate||car.usdRate)+" ₽/$"}</span></div>`:""}
+<span class="wh-detail-val">${fmtRate(carSellRate(car))} ₽/${sCur.symbol}</span></div>`:""}
 <div class="wh-detail-row"><span class="wh-detail-lbl">📊 Прибыль</span>
 <span class="wh-detail-val" style="color:${ip?"#27ae60":"#e74c3c"}">${ip?"+":""}${fmt(pr)} ₽ (${ip?"+":""}${fmtD(mg,1)}%)</span></div>
 ${car.sellDate?`<div class="wh-detail-row"><span class="wh-detail-lbl">📅 Продана</span>
@@ -175,11 +182,10 @@ if(selling){h+=`<div class="wh-sell-form" onclick="event.stopPropagation()">
 <div style="color:#888;font-size:11px;font-weight:600;margin-bottom:8px">ОФОРМИТЬ ПРОДАЖУ</div>
 <input type="number" class="wh-sell-input" placeholder="Цена продажи" value="${S.sellFormPrice}" oninput="S.sellFormPrice=this.value">
 <div class="profit-curr-row">
-${["RUB","EUR","USD"].map(c=>`<div class="pcb ${S.sellFormCurr===c?"a-"+c.toLowerCase():""}"
-onclick="S.sellFormCurr='${c}';render()">${CUR[c].symbol} ${c}</div>`).join("")}</div>
-${S.sellFormCurr!=="RUB"?`<label class="sell-rate-lbl">КУРС НА ДАТУ ПРОДАЖИ ${S.sellFormCurr==="EUR"?"€":"$"}/₽</label>
-<input type="number" class="wh-sell-input" value="${S.sellFormCurr==="EUR"?S.sellFormEur:S.sellFormUsd}"
-oninput="${S.sellFormCurr==="EUR"?"S.sellFormEur":"S.sellFormUsd"}=this.value">`:""}
+${[...new Set(["RUB",...S.activeCur,S.sellFormCurr])].map(c=>`<div class="pcb ${S.sellFormCurr===c?"a-"+CUR[c].cls:""}"
+onclick="S.sellFormCurr='${c}';S.sellFormRate=S.rates['${c}']||'';render()">${CUR[c].symbol} ${c}</div>`).join("")}</div>
+${S.sellFormCurr!=="RUB"?`<label class="sell-rate-lbl">КУРС НА ДАТУ ПРОДАЖИ ${CUR[S.sellFormCurr].symbol}/₽</label>
+<input type="number" class="wh-sell-input" value="${S.sellFormRate}" oninput="S.sellFormRate=this.value">`:""}
 <div style="display:flex;gap:8px;margin-top:4px">
 <div class="btn-action btn-green" style="flex:1;margin:0" onclick="doSell('${car.id}')">✅ ПРОДАТЬ</div>
 <div class="btn-action btn-outline" style="flex:0 0 auto;margin:0;padding:10px 16px" onclick="cancelSell()">✕</div></div></div>`}

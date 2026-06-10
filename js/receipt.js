@@ -1,13 +1,13 @@
 // ===== RECEIPTS =====
 function receiptHTML(){
-const entries=S.entries,cn=S.carName,er=S.eurRate,ur=S.usdRate,t=totR(entries,er,ur);
+const entries=S.entries,cn=S.carName,rates=S.rates,t=totR(entries,rates);
 const pd=pCalc(t),hs=pd.sell>0,ip=pd.profit>=0;
 let h=`<div class="receipt-wrap animate" id="receipt-section"><div class="receipt"><div class="perf-top"></div>
 <div class="receipt-title"><h2>★ АВТО КАЛЬКУЛЯТОР ★</h2><div class="r-sub">РАСЧЁТ СЕБЕСТОИМОСТИ</div>
 ${cn.trim()?`<div class="r-car">🚗 ${esc(cn.trim().toUpperCase())}</div>`:""}<div class="r-date">${ds()}</div><div class="r-dash"></div></div>`;
-entries.forEach(e=>{const cm=CUR[e.currency],r=entryRate(e,er,ur),rv=entryRub(e,er,ur);
+entries.forEach(e=>{const cm=CUR[e.currency]||CUR.RUB,r=entryRate(e,rates),rv=entryRub(e,rates);
 h+=`<div style="margin-bottom:8px"><div class="r-il">${e.icon} ${e.label}</div>
-<div class="r-ir"><span class="r-irl">${fmt(e.amount)} ${cm.symbol}${e.currency!=="RUB"?" × "+fmtD(r,2):""}</span>
+<div class="r-ir"><span class="r-irl">${fmt(e.amount)} ${cm.symbol}${e.currency!=="RUB"?" × "+fmtRate(r):""}</span>
 <span class="r-irr">${fmt(rv)} ₽</span></div></div>`});
 h+=`<div class="r-dash-bold"></div><div class="r-total"><span>СЕБЕСТОИМОСТЬ:</span><span>${fmt(t)} ₽</span></div>`;
 if(hs){h+=`<div class="r-dash"></div>
@@ -25,10 +25,10 @@ return h}
 
 function drawReceiptPNG(opts){
 const W=400,sc=2,cv=document.createElement("canvas"),cx=cv.getContext("2d");
-const cost=totR(opts.entries,opts.eurRate,opts.usdRate);
+const cost=totR(opts.entries,opts.rates);
 let sellRub=0,profit=0,markup=0,margin=0,hasSell=false;
 if(opts.sell&&parseFloat(opts.sell.price)){hasSell=true;
-sellRub=toR(parseFloat(opts.sell.price),opts.sell.currency,opts.sell.eurRate,opts.sell.usdRate);
+sellRub=toR(parseFloat(opts.sell.price),opts.sell.currency,opts.sell.rates);
 profit=sellRub-cost;markup=cost>0?(profit/cost)*100:0;margin=sellRub>0?(profit/sellRub)*100:0}
 let tH=60;if(opts.name)tH+=28;tH+=24+20+16+opts.entries.length*38+20+28;
 if(hasSell)tH+=140;tH+=50+30;
@@ -41,11 +41,11 @@ if(opts.name){cx.fillStyle="#2c2c2c";cx.font="bold 14px 'Courier New',monospace"
 cx.font="10px 'Courier New',monospace";cx.fillStyle="#aaa";cx.fillText(ds(),mx,y);y+=18;
 cx.setLineDash([4,3]);cx.strokeStyle="#ccc";cx.lineWidth=1;cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=14;
 cx.setLineDash([]);
-opts.entries.forEach(e=>{const cm=CUR[e.currency];
-const r=entryRate(e,opts.eurRate,opts.usdRate),rv=entryRub(e,opts.eurRate,opts.usdRate);
+opts.entries.forEach(e=>{const cm=CUR[e.currency]||CUR.RUB;
+const r=entryRate(e,opts.rates),rv=entryRub(e,opts.rates);
 cx.fillStyle="#2c2c2c";cx.font="bold 11px 'Courier New',monospace";cx.textAlign="left";cx.fillText(e.label,px,y);y+=16;
 cx.font="12px 'Courier New',monospace";cx.fillStyle="#888";cx.textAlign="left";
-cx.fillText(fmt(e.amount)+" "+cm.symbol+(e.currency!=="RUB"?" × "+fmtD(r,2):""),px+4,y);
+cx.fillText(fmt(e.amount)+" "+cm.symbol+(e.currency!=="RUB"?" × "+fmtRate(r):""),px+4,y);
 cx.fillStyle="#2c2c2c";cx.font="bold 12px 'Courier New',monospace";cx.textAlign="right";cx.fillText(fmt(rv)+" ₽",rx,y);y+=20});
 cx.setLineDash([]);cx.strokeStyle="#2c2c2c";cx.lineWidth=2;cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=4;
 cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=12;
@@ -54,7 +54,7 @@ cx.textAlign="right";cx.fillText(fmt(cost)+" ₽",rx,y);y+=22;
 if(hasSell){y+=4;cx.setLineDash([4,3]);cx.strokeStyle="#ccc";cx.lineWidth=1;cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=12;cx.setLineDash([]);
 const ip=profit>=0;const sCur=CUR[opts.sell.currency]||CUR.RUB;
 const rows=[["ЦЕНА ПРОДАЖИ:",fmt(parseFloat(opts.sell.price))+" "+sCur.symbol+(opts.sell.currency!=="RUB"?" = "+fmt(sellRub)+" ₽":""),null]];
-if(opts.sell.currency!=="RUB")rows.push(["КУРС ПРОДАЖИ:",(opts.sell.currency==="EUR"?opts.sell.eurRate+" ₽/€":opts.sell.usdRate+" ₽/$"),null]);
+if(opts.sell.currency!=="RUB")rows.push(["КУРС ПРОДАЖИ:",fmtRate(parseFloat(opts.sell.rates[opts.sell.currency]||0))+" ₽/"+sCur.symbol,null]);
 rows.push(["ПРИБЫЛЬ:",(ip?"+":"")+fmt(profit)+" ₽",ip],["НАЦЕНКА:",(ip?"+":"")+fmtD(markup,1)+"%",ip],["МАРЖА:",(ip?"+":"")+fmtD(margin,1)+"%",ip]);
 rows.forEach(([lab,v,c])=>{cx.font="bold 11px 'Courier New',monospace";cx.fillStyle="#2c2c2c";cx.textAlign="left";cx.fillText(lab,px,y);
 cx.fillStyle=c===null?"#2c2c2c":c?"#1e8449":"#922b21";cx.textAlign="right";cx.fillText(v,rx,y);y+=20})}
@@ -71,14 +71,14 @@ a.href=dataUrl;document.body.appendChild(a);a.click();document.body.removeChild(
 
 function saveCalcReceipt(){
 const sp=parseFloat(S.sellPrice)||0;
-const du=drawReceiptPNG({name:S.carName.trim(),eurRate:S.eurRate,usdRate:S.usdRate,entries:S.entries,
-sell:sp>0?{price:S.sellPrice,currency:S.sellCurrency,eurRate:S.eurRate,usdRate:S.usdRate}:null});
+const du=drawReceiptPNG({name:S.carName.trim(),rates:S.rates,entries:S.entries,
+sell:sp>0?{price:S.sellPrice,currency:S.sellCurrency,rates:S.rates}:null});
 S.receiptImage=du;downloadPNG(du,S.carName.trim());render();
 setTimeout(()=>document.getElementById("saved-img")?.scrollIntoView({behavior:"smooth"}),100)}
 
 function carReceipt(id){
 const car=S.warehouse.find(c=>c.id===id);if(!car)return;
-const du=drawReceiptPNG({name:car.name,eurRate:car.eurRate,usdRate:car.usdRate,entries:car.entries,
+const du=drawReceiptPNG({name:car.name,rates:carRates(car),entries:car.entries,
 sell:car.status==="sold"&&parseFloat(car.sellPrice)?{price:car.sellPrice,currency:car.sellCurrency,
-eurRate:car.sellEurRate||car.eurRate,usdRate:car.sellUsdRate||car.usdRate}:null});
+rates:carSellRates(car)}:null});
 S.carReceipts[id]=du;S.expandedCar=id;downloadPNG(du,car.name);render()}
