@@ -64,6 +64,10 @@ ${S.activeCur.map(c=>`<div style="flex:1 1 40%;min-width:120px"><label class="ra
 </div>
 <div class="cur-chips">
 ${Object.keys(CUR).filter(c=>c!=="RUB").map(c=>`<div class="cur-chip ${S.activeCur.includes(c)?"active":""}" onclick="togCur('${c}')">${CUR[c].symbol} ${c} · ${CUR[c].label}</div>`).join("")}</div>
+<div class="cbr-row">
+<input type="date" class="cbr-date" value="${S.cbrDate}" oninput="S.cbrDate=this.value" title="Дата курса (пусто — сегодня)">
+<div class="cbr-btn" onclick="fetchCbr()">↻ КУРС ЦБ</div></div>
+<div class="rate-hint" id="cbr-info">${S.cbrInfo||"Кнопка подтянет официальный курс ЦБ РФ — на сегодня или на выбранную дату (для оплат задним числом)."}</div>
 <div class="rate-hint">💡 Курс фиксируется за каждой позицией в момент добавления. Платишь таможню через месяц по новому курсу — поменяй курс здесь перед добавлением позиции, либо отредактируй позицию на складе.</div></div>`:""}</div>
 <div class="categories">${CATS.map((c,i)=>`<div class="cat-btn ${S.curCat===i?"active":""}" onclick="S.curCat=${i};saveDraft();render()">${c.icon} ${c.label}</div>`).join("")}</div>
 <div class="calc-body"><div class="display-box">

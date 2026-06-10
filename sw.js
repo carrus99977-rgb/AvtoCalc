@@ -1,10 +1,11 @@
 // АвтоКальк — service worker: приложение работает без интернета
-const CACHE = "avtokalk-v5";
+const CACHE = "avtokalk-v6";
 const FILES = [
   "./",
   "./index.html",
   "./styles.css",
   "./js/core.js",
+  "./js/cbr.js",
   "./js/cloud.js",
   "./js/calc.js",
   "./js/warehouse.js",
@@ -28,7 +29,9 @@ self.addEventListener("activate", e => {
   );
 });
 
-// Сначала сеть (чтобы подтянуть обновления), при отсутствии интернета — кэш
+// Сначала сеть (чтобы подтянуть обновления), при отсутствии интернета — кэш.
+// Фолбэк на index.html — только для навигации: API-запросы (курсы ЦБ, Supabase)
+// при ошибке должны падать честно, а не получать HTML со статусом 200.
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
   e.respondWith(
@@ -36,6 +39,10 @@ self.addEventListener("fetch", e => {
       const copy = resp.clone();
       caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
       return resp;
-    }).catch(() => caches.match(e.request).then(r => r || caches.match("./index.html")))
+    }).catch(() => caches.match(e.request).then(r => {
+      if (r) return r;
+      if (e.request.mode === "navigate") return caches.match("./index.html");
+      return Response.error();
+    }))
   );
 });

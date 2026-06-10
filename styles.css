@@ -216,3 +216,13 @@ body.light{--cur-cny:#9c640c;--cur-krw:#6c3483;--cur-jpy:#117a65}
 background:var(--input);color:var(--t4);border:1px solid var(--br);white-space:nowrap}
 .cur-chip.active{background:var(--gold);color:#1a1a2e;border-color:var(--gold)}
 .cur-chip:active{transform:scale(.93)}
+
+/* ===== Курс ЦБ ===== */
+.cbr-row{display:flex;gap:8px;margin-top:10px}
+.cbr-date{flex:1;padding:8px 10px;background:var(--input);border:1px solid var(--br2);border-radius:8px;
+color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:12px;outline:none;color-scheme:dark;min-width:0}
+body.light .cbr-date{color-scheme:light}
+.cbr-btn{flex:0 0 auto;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;
+letter-spacing:1px;font-family:'Oswald',sans-serif;background:linear-gradient(135deg,#3498db,#2471a3);
+color:#fff;display:flex;align-items:center;box-shadow:0 2px 8px rgba(52,152,219,.3)}
+.cbr-btn:active{transform:scale(.95)}
