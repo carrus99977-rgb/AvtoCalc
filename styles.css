@@ -226,3 +226,14 @@ body.light .cbr-date{color-scheme:light}
 letter-spacing:1px;font-family:'Oswald',sans-serif;background:linear-gradient(135deg,#3498db,#2471a3);
 color:#fff;display:flex;align-items:center;box-shadow:0 2px 8px rgba(52,152,219,.3)}
 .cbr-btn:active{transform:scale(.95)}
+
+/* ===== Поиск и сортировка склада ===== */
+.wh-search{width:100%;padding:10px 14px;background:var(--card);border:1px solid var(--br);border-radius:10px;
+color:var(--t1);font-size:13px;font-family:'JetBrains Mono',monospace;outline:none;margin-bottom:8px}
+.wh-search:focus{border-color:var(--gold)}
+.wh-search::placeholder{color:var(--t5)}
+.sort-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.sort-chip{padding:5px 10px;border-radius:8px;font-size:9px;font-weight:600;cursor:pointer;
+background:var(--card);color:var(--t4);border:1px solid var(--br);letter-spacing:.5px}
+.sort-chip.active{background:var(--br2);color:var(--t1);border-color:var(--key-br)}
+.sort-chip:active{transform:scale(.93)}

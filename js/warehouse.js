@@ -90,14 +90,39 @@ if(i>=0)S.warehouse[i]=nc;else S.warehouse.push(nc);cloudUpsert(nc)});
 saveWH();render()})}catch(err){alert("Ошибка чтения файла")}};
 reader.readAsText(f);ev.target.value=""});
 
+// ===== ПОИСК И СОРТИРОВКА =====
+function whMatch(car){const q=S.whSearch.trim().toLowerCase();return !q||car.name.toLowerCase().includes(q)}
+function sortStock(list){const l=[...list];
+if(S.whSort==="old")return l.sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+if(S.whSort==="exp")return l.sort((a,b)=>carCost(b)-carCost(a));
+if(S.whSort==="cheap")return l.sort((a,b)=>carCost(a)-carCost(b));
+return l.sort((a,b)=>(b.date||"").localeCompare(a.date||""))}
+function stockListHTML(){
+const stk=sortStock(S.warehouse.filter(c=>c.status==="stock"&&whMatch(c)));
+if(!stk.length)return `<div class="empty-state"><div class="em-icon">🏭</div><div class="em-text">${S.whSearch.trim()?"Ничего не найдено":"Склад пуст"}<br><span style="color:#444;font-size:11px">${S.whSearch.trim()?"Поправьте запрос":"Добавьте машину через калькулятор"}</span></div></div>`;
+return stk.map(c=>carCardHTML(c)).join("")}
+function soldListHTML(){
+const sld=S.warehouse.filter(c=>c.status==="sold"&&whMatch(c));
+if(!sld.length)return `<div class="empty-state"><div class="em-icon">📊</div><div class="em-text">${S.whSearch.trim()?"Ничего не найдено":"Нет проданных машин"}</div></div>`;
+return sld.map(c=>carCardHTML(c)).join("")}
+// Частичная перерисовка списков — фокус в поле поиска не теряется
+function rLists(){const a=document.getElementById("wh-list");if(a)a.innerHTML=stockListHTML();
+const b=document.getElementById("sold-list");if(b)b.innerHTML=soldListHTML()}
+
 function whHTML(){
 const stk=S.warehouse.filter(c=>c.status==="stock");
+const frozen=stk.reduce((s,c)=>s+carCost(c),0);
+const avgAge=stk.length?Math.round(stk.reduce((s,c)=>s+daysBetween(c.date,new Date()),0)/stk.length):0;
 let h=`<div class="section-divider" id="wh-section"><span>🏭 Склад (${stk.length})</span></div>
 ${cloudBoxHTML()}<div class="backup-row">
 <div class="backup-btn" onclick="exportData()">💾 ЭКСПОРТ БАЗЫ</div>
 <div class="backup-btn" onclick="importData()">📥 ИМПОРТ БАЗЫ</div></div>`;
-if(!stk.length)h+=`<div class="empty-state"><div class="em-icon">🏭</div><div class="em-text">Склад пуст<br><span style="color:#444;font-size:11px">Добавьте машину через калькулятор</span></div></div>`;
-stk.forEach(car=>h+=carCardHTML(car));
+if(stk.length)h+=`<div class="stats-bar">
+<div class="stat-card"><div class="stat-num gold">${fmt(frozen)}</div><div class="stat-lbl">ЗАМОРОЖЕНО ₽</div></div>
+<div class="stat-card"><div class="stat-num blue">${avgAge}</div><div class="stat-lbl">СР. ДНЕЙ НА СКЛАДЕ</div></div></div>`;
+if(S.warehouse.length)h+=`<input type="text" class="wh-search" placeholder="🔍 Поиск по названию" value="${esc(S.whSearch)}" oninput="S.whSearch=this.value;rLists()">
+<div class="sort-row">${[["new","СНАЧАЛА НОВЫЕ"],["old","СТАРЫЕ"],["exp","ДОРОЖЕ"],["cheap","ДЕШЕВЛЕ"]].map(([k,lbl])=>`<div class="sort-chip ${S.whSort===k?"active":""}" onclick="S.whSort='${k}';render()">${lbl}</div>`).join("")}</div>`;
+h+=`<div id="wh-list">${stockListHTML()}</div>`;
 return h}
 
 function soldHTML(){
@@ -107,8 +132,7 @@ let h=`<div class="section-divider sold" id="sold-section"><span>💰 Прода
 if(sld.length)h+=`<div class="stats-bar">
 <div class="stat-card"><div class="stat-num green">${sld.length}</div><div class="stat-lbl">МАШИН</div></div>
 <div class="stat-card"><div class="stat-num ${tp>=0?"green":"red"}">${tp>=0?"+":""}${fmt(tp)}</div><div class="stat-lbl">ПРИБЫЛЬ ₽</div></div></div>`;
-if(!sld.length)h+=`<div class="empty-state"><div class="em-icon">📊</div><div class="em-text">Нет проданных машин</div></div>`;
-sld.forEach(car=>h+=carCardHTML(car));
+h+=`<div id="sold-list">${soldListHTML()}</div>`;
 return h}
 
 function carCardHTML(car){
