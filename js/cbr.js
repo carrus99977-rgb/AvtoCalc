@@ -33,6 +33,8 @@ S.rates[c]=String(Math.round(perUnit*1e6)/1e6);n++});
 if(!n)throw new Error("пусто");
 const dt=new Date(data.Date);
 S.cbrInfo=`✓ Курс ЦБ на ${dt.toLocaleDateString("ru-RU")}`;
+// показываем дату полученного курса в поле даты (ЦБ ставит метку 11:30+03:00 — UTC-сдвига дня не будет)
+try{S.cbrDate=dt.toISOString().slice(0,10)}catch(_){}
 S.cbrBusy=false;saveDraft();render()}
 catch(e){S.cbrBusy=false;
 S.cbrInfo="⚠ Не удалось получить курс — проверь интернет или дату";renderCbrInfo()}}

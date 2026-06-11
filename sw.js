@@ -1,5 +1,5 @@
 // АвтоКальк — service worker: приложение работает без интернета
-const CACHE = "avtokalk-v14";
+const CACHE = "avtokalk-v15";
 const FILES = [
   "./",
   "./index.html",
