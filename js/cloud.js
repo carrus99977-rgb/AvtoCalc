@@ -59,6 +59,20 @@ if(reg&&data&&data.user&&!data.session){setStatus("проверь почту");a
 CL.user=(data&&data.user)||null;setStatus("вход выполнен");fullSync();render()})
 .catch(err=>{setStatus("нет связи");alert("Ошибка: "+humanAuthError(err&&err.message))})}
 
+// Диагностика: доходят ли запросы до облака с ЭТОГО устройства
+async function diagCloud(){
+setStatus("проверка связи...");
+const t0=Date.now();
+try{
+const r=await fetch(CL.url+"/auth/v1/health",{headers:{apikey:CL.key},signal:AbortSignal.timeout(15000)});
+const ms=Date.now()-t0;
+if(r.ok){setStatus("связь ок");
+alert("✅ Связь с облаком есть (ответ за "+(ms/1000).toFixed(1)+" сек).\nЕсли вход не проходит — дело в почте или пароле, а не в сети.")}
+else{setStatus("ошибка "+r.status);
+alert("⚠️ Сервер отвечает, но с ошибкой "+r.status+". Подожди пару минут и попробуй снова.")}
+}catch(e){const ms=Date.now()-t0;setStatus("нет связи");
+alert("❌ Запрос до облака не дошёл"+(ms>14000?" (ждали 15 сек — не дождались)":"")+".\nСкорее всего, сеть блокирует доступ: попробуй переключить Wi-Fi ↔ мобильный интернет или выключить VPN, затем нажми проверку ещё раз.")}}
+
 function cloudLogout(){if(CL.sb)CL.sb.auth.signOut();CL.user=null;setStatus("вышел");render()}
 function cloudReset(){showConfirm("Удалить настройки облака с этого устройства? (данные в облаке останутся)",()=>{
 CL.url=SB_URL_DEFAULT;CL.key=SB_KEY_DEFAULT;CL.user=null;CL.sb=null;saveCloudCfg();initCloud();render()})}
@@ -123,9 +137,10 @@ ${configured?`<div class="btn-action btn-outline" style="flex:0 0 auto;margin:0;
 inner=`<div style="color:#778;font-size:10px;margin-bottom:8px">Войди или зарегистрируйся (первый раз — жми Регистрация):</div>
 <input type="email" class="wh-sell-input" id="cl-email" placeholder="Почта" value="${esc(CL.email)}" oninput="CL.email=this.value">
 <input type="password" class="wh-sell-input" id="cl-pass" placeholder="Пароль (мин. 6 симв.)" oninput="CL.pass=this.value">
-<div style="display:flex;gap:8px">
+<div style="display:flex;gap:8px;margin-bottom:8px">
 <div class="btn-action btn-green" style="flex:1;margin:0;font-size:11px;padding:10px 0" onclick="cloudLogin(false)">ВОЙТИ</div>
-<div class="btn-action btn-blue" style="flex:1;margin:0;font-size:11px;padding:10px 0" onclick="cloudLogin(true)">РЕГИСТРАЦИЯ</div></div>`;
+<div class="btn-action btn-blue" style="flex:1;margin:0;font-size:11px;padding:10px 0" onclick="cloudLogin(true)">РЕГИСТРАЦИЯ</div></div>
+<div class="backup-btn" onclick="diagCloud()">🩺 ПРОВЕРИТЬ СВЯЗЬ С ОБЛАКОМ</div>`;
 }else{
 inner=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
 <div><div style="color:var(--ok2);font-size:11px;font-weight:600">✓ ${esc((CL.user.email||""))}</div>
