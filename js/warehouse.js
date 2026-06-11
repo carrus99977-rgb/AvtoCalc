@@ -1,6 +1,7 @@
 // ===== WAREHOUSE =====
 function addToWH(){if(!S.carName.trim()){alert("Введите название авто");return}
 if(S.entries.length===0){alert("Добавьте хотя бы одну позицию");return}
+for(const e of S.entries){if(e.currency!=="RUB"&&!(entryRate(e,S.rates)>0)){alert("Проверьте курсы — есть позиции без курса");return}}
 S.warehouse.unshift({id:uid(),name:S.carName.trim(),date:new Date().toISOString(),
 rates:{...S.rates},eurRate:S.rates.EUR||"",usdRate:S.rates.USD||"",
 entries:JSON.parse(JSON.stringify(S.entries)),
@@ -53,7 +54,7 @@ function carDateInput(car){try{const d=new Date(car.date);if(isNaN(d))return"";
 const p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())}catch(e){return""}}
 function startCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 S.editingCarId=id;S.sellingCarId=null;S.expandedCar=id;
-S.editName=car.name;S.editDate=carDateInput(car);
+S.editName=car.name;S.editDate=carDateInput(car);S.editAskPrice=car.askPrice||"";
 const cr=carRates(car);
 S.editCarEntries=car.entries.map(e=>({...e,
 rate:e.rate||(e.currency==="RUB"?"":(cr[e.currency]||""))}));
@@ -67,6 +68,7 @@ for(const e of S.editCarEntries){if(!(parseFloat(e.amount)>0)){alert("Прове
 if(e.currency!=="RUB"&&!(parseFloat(e.rate)>0)){alert("Проверьте курсы — есть пустые");return}}
 car.entries=S.editCarEntries.map(e=>({...e,amount:parseFloat(e.amount),rate:e.currency==="RUB"?"":String(e.rate)}));
 car.name=S.editName.trim();
+const ap=parseFloat(S.editAskPrice);car.askPrice=isFinite(ap)&&ap>0?String(ap):"";
 // пустую/битую дату не трогаем; иначе фиксируем полдень выбранного дня (без сдвига пояса)
 if(/^\d{4}-\d{2}-\d{2}$/.test(S.editDate||"")){const d=new Date(S.editDate+"T12:00:00");if(!isNaN(d))car.date=d.toISOString()}
 S.editingCarId=null;S.editCarEntries=null;saveWH();cloudUpsert(car);render()}
@@ -139,7 +141,8 @@ if(backupNeeded())h+=`<div class="backup-warn">
 h+=`${cloudBoxHTML()}<div class="backup-row">
 <div class="backup-btn" onclick="exportData()">💾 ЭКСПОРТ БАЗЫ</div>
 <div class="backup-btn" onclick="importData()">📥 ИМПОРТ БАЗЫ</div>
-<div class="backup-btn" onclick="exportCSV()">📊 EXCEL</div></div>`;
+<div class="backup-btn" onclick="exportCSV()">📊 EXCEL</div>
+<div class="backup-btn" onclick="shareStockList()">📤 СПИСОК</div></div>`;
 if(stk.length)h+=`<div class="stats-bar">
 <div class="stat-card"><div class="stat-num gold">${fmt(frozen)}</div><div class="stat-lbl">ЗАМОРОЖЕНО ₽</div></div>
 <div class="stat-card"><div class="stat-num blue">${avgAge}</div><div class="stat-lbl">СР. ДНЕЙ НА СКЛАДЕ</div></div></div>`;
@@ -177,6 +180,9 @@ h+=`<div class="wh-detail" onclick="event.stopPropagation()">
 <input type="text" class="edit-input" value="${esc(S.editName)}" oninput="S.editName=this.value"></div>
 <div class="edit-field"><label class="edit-lbl">ДАТА ПОКУПКИ</label>
 <input type="date" class="edit-input edit-date" value="${esc(S.editDate)}" oninput="S.editDate=this.value"></div></div>
+<div class="edit-fields" style="margin-bottom:10px">
+<div class="edit-field"><label class="edit-lbl">ЦЕНА ДЛЯ КЛИЕНТА ₽ (для списка машин, не себестоимость)</label>
+<input type="number" class="edit-input" placeholder="не указана" value="${esc(S.editAskPrice)}" oninput="S.editAskPrice=this.value"></div></div>
 <div style="color:#667;font-size:9px;margin-bottom:6px;letter-spacing:.5px">КУРСЫ ПО ФАКТУ ОПЛАТЫ:</div>`;
 if(bulkCurs.length){
 h+=`<div style="color:#667;font-size:9px;margin-bottom:6px;letter-spacing:.5px">БЫСТРО ПРИМЕНИТЬ КУРС КО ВСЕМ ПОЗИЦИЯМ:</div>`;
@@ -213,6 +219,9 @@ h+=`<div class="wh-detail-row"><span class="wh-detail-lbl">${esc(e.icon)} ${esc(
 h+=`<div class="wh-detail-row" style="border-top:2px solid var(--br2);padding-top:8px;margin-top:4px">
 <span style="color:var(--gold);font-size:12px;font-weight:700">СЕБЕСТОИМОСТЬ</span>
 <span style="color:var(--gold);font-size:14px;font-weight:700;font-family:'Oswald',sans-serif">${fmt(cost)} ₽</span></div>`;
+if(car.status==="stock"&&parseFloat(car.askPrice)>0)h+=`<div class="wh-detail-row">
+<span class="wh-detail-lbl">💰 Цена для клиента</span>
+<span class="wh-detail-val">${fmt(parseFloat(car.askPrice))} ₽</span></div>`;
 if(car.status==="sold"){const mg=cost>0?(pr/cost)*100:0,ip=pr>=0;
 const sCur=curInfo(car.sellCurrency);
 h+=`<div class="wh-detail-row"><span class="wh-detail-lbl">💰 Продажа</span>

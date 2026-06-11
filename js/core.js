@@ -19,7 +19,7 @@ showReceipt:false,showSettings:true,showProfit:true,sellPrice:"",sellCurrency:"R
 warehouse:[],expandedCar:null,sellingCarId:null,whSearch:"",whSort:"new",
 sellFormPrice:"",sellFormCurr:"RUB",sellFormRate:"",
 editingEntry:null,editValue:"",editCurr:"RUB",editRate:"",
-editingCarId:null,editCarEntries:null,bulkRates:{},editName:"",editDate:"",
+editingCarId:null,editCarEntries:null,bulkRates:{},editName:"",editDate:"",editAskPrice:"",
 cbrBusy:false,cbrDate:"",cbrInfo:"",
 toast:null,backupHidden:false,
 carReceipts:{},confirmAction:null};
@@ -108,7 +108,8 @@ sellCurrency:typeof c.sellCurrency==="string"?c.sellCurrency:"RUB",
 sellDate:c.sellDate||null,
 sellRates,
 sellEurRate:String((sellRates&&sellRates.EUR)||""),
-sellUsdRate:String((sellRates&&sellRates.USD)||"")}}
+sellUsdRate:String((sellRates&&sellRates.USD)||""),
+askPrice:(()=>{const ap=parseFloat(c.askPrice);return isFinite(ap)&&ap>0?String(ap):""})()}}
 // Карта курсов машины: новый формат — car.rates, старый — eurRate/usdRate
 function carRates(car){return car.rates||{EUR:car.eurRate,USD:car.usdRate}}
 function carSellRates(car){const r={...carRates(car)};

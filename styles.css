@@ -121,7 +121,8 @@ font-size:16px;font-weight:700;color:var(--gold);letter-spacing:3px;text-transfo
 .stat-num{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:1px}
 .stat-num.gold{color:var(--gold)}.stat-num.green{color:#27ae60}.stat-num.red{color:#e74c3c}.stat-num.blue{color:#3498db}
 .stat-lbl{font-size:9px;color:var(--t5);margin-top:2px}
-.backup-row{display:flex;gap:8px;margin-bottom:14px}
+.backup-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.backup-row .backup-btn{min-width:31%}
 .backup-btn{flex:1;padding:9px 0;text-align:center;border-radius:8px;cursor:pointer;font-size:10px;font-weight:600;
 letter-spacing:1px;background:var(--card);color:var(--t4);border:1px solid var(--br);font-family:'Oswald',sans-serif}
 .backup-btn:active{transform:scale(.95)}
@@ -251,6 +252,8 @@ body.light .cbr-date{color-scheme:light}
 letter-spacing:1px;font-family:'Oswald',sans-serif;background:linear-gradient(135deg,#3498db,#2471a3);
 color:#fff;display:flex;align-items:center;box-shadow:0 2px 8px rgba(52,152,219,.3)}
 .cbr-btn:active{transform:scale(.95)}
+.cbr-btn.cbr-clear{background:transparent;color:var(--t3);border:1px solid var(--br2);box-shadow:none;padding:8px 12px}
+.cbr-btn.cbr-clear:active{transform:scale(.93)}
 
 /* ===== Поиск и сортировка склада ===== */
 .wh-search{width:100%;padding:10px 14px;background:var(--card);border:1px solid var(--br);border-radius:10px;

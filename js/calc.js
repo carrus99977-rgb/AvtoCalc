@@ -3,7 +3,10 @@ function digit(d){vibrate(8);if(S.display==="0"&&d!==".")S.display=d;else if(d==
 function clr(){vibrate(8);S.display="0";rDisp()}
 function bsp(){vibrate(8);S.display=S.display.length<=1?"0":S.display.slice(0,-1);rDisp()}
 function tri(n){vibrate(8);if(S.display!=="0"){S.display+=n;rDisp()}}
-function curClick(cid){vibrate(14);const a=parseFloat(S.display)||0;if(a<=0)return;const cat=CATS[S.curCat];
+function curClick(cid){vibrate(14);const a=parseFloat(S.display)||0;if(a<=0)return;
+// без курса позицию не добавляем — иначе она молча станет 0 ₽ (актуально после «✕ очистить»)
+if(cid!=="RUB"&&!(parseFloat(S.rates[cid])>0)){alert("Введите курс "+cid+"/₽ — он зафиксируется за позицией");return}
+const cat=CATS[S.curCat];
 // фиксируем курс на момент добавления позиции
 const rate=cid==="RUB"?"":(S.rates[cid]||"");
 S.entries.push({category:cat.id,label:cat.label,icon:cat.icon,amount:a,currency:cid,rate:rate});
@@ -30,6 +33,10 @@ function pCalc(cost){const sell=toR(parseFloat(S.sellPrice)||0,S.sellCurrency,S.
 return{cost,sell,profit:pr,markup:cost>0?(pr/cost)*100:0,margin:sell>0?(pr/sell)*100:0}}
 
 // Включение/выключение валюты в настройках
+// Очистить значения курсов активных валют и дату ЦБ (позиции не трогаем — у них курс зафиксирован)
+function clearRates(){S.activeCur.forEach(c=>S.rates[c]="");
+S.cbrDate="";S.cbrInfo="";saveDraft();render()}
+
 function togCur(c){const i=S.activeCur.indexOf(c);
 if(i>=0){if(S.activeCur.length<=1){alert("Оставьте хотя бы одну валюту");return}
 S.activeCur.splice(i,1);if(S.sellCurrency===c)S.sellCurrency="RUB"}
@@ -69,7 +76,8 @@ ${S.activeCur.map(c=>`<div style="flex:1 1 40%;min-width:120px"><label class="ra
 ${Object.keys(CUR).filter(c=>c!=="RUB").map(c=>`<div class="cur-chip ${S.activeCur.includes(c)?"active":""}" onclick="togCur('${c}')">${CUR[c].symbol} ${c} · ${CUR[c].label}</div>`).join("")}</div>
 <div class="cbr-row">
 <input type="date" class="cbr-date" value="${esc(S.cbrDate)}" oninput="S.cbrDate=this.value" title="Дата курса (пусто — сегодня)">
-<div class="cbr-btn" onclick="fetchCbr()">↻ КУРС ЦБ</div></div>
+<div class="cbr-btn" onclick="fetchCbr()">↻ КУРС ЦБ</div>
+<div class="cbr-btn cbr-clear" onclick="clearRates()" title="Очистить курсы и дату">✕</div></div>
 <div class="rate-hint" id="cbr-info">${S.cbrInfo||"Кнопка подтянет официальный курс ЦБ РФ — на сегодня или на выбранную дату (для оплат задним числом)."}</div>
 <div class="rate-hint">💡 Курс фиксируется за каждой позицией в момент добавления. Платишь таможню через месяц по новому курсу — поменяй курс здесь перед добавлением позиции, либо отредактируй позицию на складе.</div></div>`:""}</div>
 <div class="categories">${CATS.map((c,i)=>`<div class="cat-btn ${S.curCat===i?"active":""}" onclick="S.curCat=${i};saveDraft();render()">${c.icon} ${c.label}</div>`).join("")}</div>

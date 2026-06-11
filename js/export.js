@@ -36,3 +36,31 @@ a.download="АвтоСклад_"+new Date().toLocaleDateString("ru-RU").replace(
 document.body.appendChild(a);a.click();document.body.removeChild(a);
 // CSV — отчёт, не восстановимый бэкап: НЕ глушим напоминание о сохранении базы
 setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+
+// ===== СПИСОК МАШИН ТЕКСТОМ (для клиентов) =====
+// Только машины в наличии, только название и «цена для клиента» —
+// себестоимость и прибыль в текст не попадают никогда.
+function stockListText(){
+// тот же порядок, что на экране (текущая сортировка), но без поискового фильтра
+const stk=sortStock(S.warehouse.filter(c=>c.status==="stock"));
+if(!stk.length)return null;
+let t="🚗 МАШИНЫ В НАЛИЧИИ ("+new Date().toLocaleDateString("ru-RU")+"):\n";
+stk.forEach(c=>{const p=parseFloat(c.askPrice);
+t+="• "+c.name+(p>0?" — "+fmt(p)+" ₽":" — цена по запросу")+"\n"});
+return t.trim()}
+function shareStockList(){
+const t=stockListText();
+if(!t){alert("На складе нет машин");return}
+if(navigator.share){
+navigator.share({text:t}).catch(err=>{if(!err||err.name!=="AbortError")copyStockList(t)});
+return}
+copyStockList(t)}
+function copyStockList(t){
+const done=()=>showToast("Список скопирован — вставьте в чат");
+try{navigator.clipboard.writeText(t).then(done,()=>fallbackCopy(t,done))}
+catch(e){fallbackCopy(t,done)}}
+function fallbackCopy(t,done){
+const ta=document.createElement("textarea");ta.value=t;
+document.body.appendChild(ta);ta.select();
+try{if(!document.execCommand("copy"))throw 0;done()}catch(e){alert(t)}
+document.body.removeChild(ta)}
