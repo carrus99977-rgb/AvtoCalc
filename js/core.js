@@ -21,7 +21,7 @@ sellFormPrice:"",sellFormCurr:"RUB",sellFormRate:"",
 editingEntry:null,editValue:"",editCurr:"RUB",editRate:"",
 editingCarId:null,editCarEntries:null,bulkRates:{},editName:"",editDate:"",editAskPrice:"",
 cbrBusy:false,cbrDate:"",cbrInfo:"",
-toast:null,backupHidden:false,chartMonth:null,chartCat:null,
+toast:null,backupHidden:false,statScope:"all",chartCat:null,
 carReceipts:{},confirmAction:null};
 
 // ===== PERSISTENCE =====

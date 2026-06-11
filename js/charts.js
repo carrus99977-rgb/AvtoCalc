@@ -23,41 +23,51 @@ const k=d.getFullYear()*12+d.getMonth();
 out.push({m:d.getMonth(),y:d.getFullYear(),profit:map[k]?map[k].profit:0,count:map[k]?map[k].count:0})}
 return out}
 
-// --- гистограмма по месяцам ---
+// --- область просмотра: "all" (всё время) или индекс месяца в окне 12 мес ---
+function scopeMonthMY(){if(S.statScope==null||S.statScope==="all")return null;
+const d=monthsData()[S.statScope];return d?{m:d.m,y:d.y}:null}
+// только продажи с валидной датой — одна и та же популяция, что в верхней карточке «общая прибыль» и в гистограмме
+function scopedSold(){const sold=S.warehouse.filter(c=>c.status==="sold"&&c.sellDate&&!isNaN(new Date(c.sellDate)));
+const sm=scopeMonthMY();if(!sm)return sold;
+return sold.filter(c=>{const d=new Date(c.sellDate);return d.getFullYear()===sm.y&&d.getMonth()===sm.m})}
+function scopeShort(){const sm=scopeMonthMY();return sm?MONTH_NAMES[sm.m]+" "+sm.y:"всё время"}
+function scopeFull(){const sm=scopeMonthMY();return sm?MONTH_FULL[sm.m]+" "+sm.y:"Всё время"}
+function profitSum(list){return list.reduce((s,c)=>{const p=carProfit(c);return s+(Number.isFinite(p)?p:0)},0)}
+
+// --- гистограмма по месяцам (переключатель периода) ---
 function monthsChartHTML(){
 const data=monthsData();
-// по умолчанию выбран последний непустой месяц
-if(S.chartMonth==null){for(let i=data.length-1;i>=0;i--)if(data[i].count){S.chartMonth=i;break}}
+const isAll=scopeMonthMY()==null;
+const W=360,chartH=140,top=12;
 const posMax=Math.max(0,...data.map(d=>d.profit));
 const negMin=Math.min(0,...data.map(d=>d.profit));
 const span=(posMax-negMin)||1;
-const W=360,chartH=140,top=12,zeroY=top+(posMax/span)*chartH;
+const zeroY=top+(posMax/span)*chartH;
 const slot=W/12,barW=20;
 let bars="";
 data.forEach((d,i)=>{
 const x=i*slot+(slot-barW)/2;
 const h=Math.abs(d.profit)/span*chartH;
-const sel=S.chartMonth===i;
+const sel=S.statScope===i;
 if(d.count){
 const bh=Math.max(h,2),y=d.profit>=0?zeroY-bh:zeroY;
 bars+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${bh.toFixed(1)}" rx="3"
 fill="${d.profit>=0?"url(#barG)":"url(#barR)"}" ${sel?'stroke="var(--gold)" stroke-width="1.5"':""}/>`;
 }else{
-// пустой месяц — чёрточка на нулевой линии
 bars+=`<rect x="${x.toFixed(1)}" y="${(zeroY-1).toFixed(1)}" width="${barW}" height="2" rx="1" fill="var(--br2)"/>`;
 }
-// зона тапа на всю колонку
 bars+=`<rect x="${(i*slot).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${chartH+top+22}" fill="transparent" style="cursor:pointer" onclick="selMonth(${i})"/>`;
-// подпись месяца (январь — с годом)
 const lbl=d.m===0?MONTH_NAMES[d.m]+"·"+String(d.y).slice(2):MONTH_NAMES[d.m];
 bars+=`<text x="${(i*slot+slot/2).toFixed(1)}" y="${chartH+top+16}" text-anchor="middle"
 font-size="8.5" fill="${sel?"var(--gold)":"var(--t4)"}" font-family="JetBrains Mono,monospace">${lbl}</text>`});
-const d0=data[S.chartMonth]||{};
-const info=d0.count
-?`${MONTH_FULL[d0.m]} ${d0.y}: <b style="color:${d0.profit>=0?"#27ae60":"#e74c3c"}">${d0.profit>=0?"+":""}${fmt(d0.profit)} ₽</b> · ${d0.count} маш.`
-:"Нажми на столбик месяца";
+// сводка по текущей области
+const scoped=scopedSold(),tp=profitSum(scoped),n=scoped.length;
+const info=`${scopeFull()}: <b style="color:${tp>=0?"#27ae60":"#e74c3c"}">${tp>=0?"+":""}${fmt(tp)} ₽</b> · ${n} маш.`;
 return `<div class="coll-box"><div class="coll-header" style="cursor:default"><span>📊 Прибыль по месяцам</span></div>
 <div class="coll-body">
+<div class="scope-row">
+<div class="scope-pill ${isAll?"active":""}" onclick="selAll()">Σ ВСЁ ВРЕМЯ</div>
+<div class="scope-hint">${isAll?"нажми на месяц, чтобы смотреть его":"показан "+scopeShort()}</div></div>
 <svg viewBox="0 0 ${W} ${chartH+top+22}" style="width:100%;display:block">
 <defs>
 <linearGradient id="barG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2ecc71"/><stop offset="1" stop-color="#1e8449"/></linearGradient>
@@ -66,21 +76,22 @@ return `<div class="coll-box"><div class="coll-header" style="cursor:default"><s
 <line x1="0" y1="${zeroY.toFixed(1)}" x2="${W}" y2="${zeroY.toFixed(1)}" stroke="var(--br2)" stroke-width="1"/>
 ${bars}</svg>
 <div class="chart-info">${info}</div></div></div>`}
-function selMonth(i){if(!monthsData()[i].count)return;S.chartMonth=i;rCharts()}
+function selMonth(i){if(!monthsData()[i].count)return;S.statScope=i;S.chartCat=null;rCharts()}
+function selAll(){S.statScope="all";S.chartCat=null;rCharts()}
 
-// --- пончик расходов по категориям ---
-function categoryData(){
+// --- пончик расходов по категориям (по выбранной области) ---
+function categoryData(list){
 const sums={};let total=0;
-S.warehouse.forEach(car=>{if(car.status!=="sold")return;
-const cr=carRates(car);
+list.forEach(car=>{const cr=carRates(car);
 car.entries.forEach(e=>{const v=entryRub(e,cr);if(!(v>0))return;
 const k=CHART_COLORS[e.category]?e.category:"other";
 sums[k]=(sums[k]||0)+v;total+=v})});
 return{sums,total}}
 
 function donutChartHTML(){
-const{sums,total}=categoryData();
-if(!total)return"";
+const{sums,total}=categoryData(scopedSold());
+const head=`<div class="coll-header" style="cursor:default"><span>🧩 Расходы — ${esc(scopeShort())}</span></div>`;
+if(!total)return `<div class="coll-box">${head}<div class="coll-body"><div class="chart-empty">Нет расходов за период</div></div></div>`;
 const cats=CATS.filter(c=>sums[c.id]).map(c=>({id:c.id,label:c.label,icon:c.icon,v:sums[c.id]}));
 const R=58,CX=85,CY=85,C=2*Math.PI*R;
 let off=0,segs="";
@@ -101,25 +112,26 @@ const legend=cats.map(c=>`<div class="cl-row ${S.chartCat===c.id?"sel":""}" oncl
 <span class="cl-dot" style="background:${CHART_COLORS[c.id]}"></span>
 <span class="cl-name">${c.icon} ${c.label}</span>
 <span class="cl-val">${fmtShort(c.v)} ₽ · ${fmtD(c.v/total*100,1)}%</span></div>`).join("");
-return `<div class="coll-box"><div class="coll-header" style="cursor:default"><span>🧩 Расходы по категориям</span></div>
+return `<div class="coll-box">${head}
 <div class="coll-body"><div class="donut-wrap">
 <svg viewBox="0 0 170 170" class="donut-svg">${segs}${center}</svg>
 <div class="cl-legend">${legend}</div></div></div></div>`}
 function selCat(k){S.chartCat=S.chartCat===k?null:k;rCharts()}
 
-// --- прибыль по машинам ---
+// --- прибыль по машинам (по выбранной области) ---
 function carsChartHTML(){
-const sld=S.warehouse.filter(c=>c.status==="sold")
+const sld=scopedSold()
 .map(c=>{const p=carProfit(c);return{name:c.name,profit:Number.isFinite(p)?p:0}})
 .sort((a,b)=>b.profit-a.profit);
-if(!sld.length)return"";
+const head=`<div class="coll-header" style="cursor:default"><span>🏆 Прибыль по машинам — ${esc(scopeShort())}</span></div>`;
+if(!sld.length)return `<div class="coll-box">${head}<div class="coll-body"><div class="chart-empty">Нет продаж за период</div></div></div>`;
 const top=sld.slice(0,8),rest=sld.length-top.length;
 const maxAbs=Math.max(...top.map(c=>Math.abs(c.profit)),1);
 const rows=top.map(c=>{const ip=c.profit>=0,w=Math.max(Math.abs(c.profit)/maxAbs*100,3);
 return `<div class="cb-row"><div class="cb-name">${esc(c.name)}</div>
 <div class="cb-track"><div class="cb-bar ${ip?"pos":"neg"}" style="width:${w.toFixed(1)}%"></div></div>
 <div class="cb-val" style="color:${ip?"#27ae60":"#e74c3c"}">${ip?"+":""}${fmtShort(c.profit)}</div></div>`}).join("");
-return `<div class="coll-box"><div class="coll-header" style="cursor:default"><span>🏆 Прибыль по машинам</span></div>
+return `<div class="coll-box">${head}
 <div class="coll-body">${rows}${rest>0?`<div class="cb-more">и ещё ${rest} маш.</div>`:""}</div></div>`}
 
 // --- сборка и частичная перерисовка ---
