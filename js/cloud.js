@@ -118,15 +118,14 @@ inner=`<div style="color:#778;font-size:10px;line-height:1.5;margin-bottom:10px"
 ${configured?`<div class="btn-action btn-outline" style="flex:0 0 auto;margin:0;padding:10px 14px;font-size:11px" onclick="CL.showSetup=false;render()">✕</div>`:""}
 </div>`;
 }else if(!CL.user){
+// Кнопки настроек проекта (URL/ключ) скрыты: обычному пользователю они не нужны,
+// подключение другого облака — через правку SB_URL_DEFAULT/SB_KEY_DEFAULT в коде
 inner=`<div style="color:#778;font-size:10px;margin-bottom:8px">Войди или зарегистрируйся (первый раз — жми Регистрация):</div>
 <input type="email" class="wh-sell-input" id="cl-email" placeholder="Почта" value="${esc(CL.email)}" oninput="CL.email=this.value">
 <input type="password" class="wh-sell-input" id="cl-pass" placeholder="Пароль (мин. 6 симв.)" oninput="CL.pass=this.value">
-<div style="display:flex;gap:8px;margin-bottom:8px">
-<div class="btn-action btn-green" style="flex:1;margin:0;font-size:11px;padding:10px 0" onclick="cloudLogin(false)">ВОЙТИ</div>
-<div class="btn-action btn-blue" style="flex:1;margin:0;font-size:11px;padding:10px 0" onclick="cloudLogin(true)">РЕГИСТРАЦИЯ</div></div>
 <div style="display:flex;gap:8px">
-<div class="backup-btn" onclick="CL.showSetup=true;render()">⚙️ НАСТРОЙКИ</div>
-<div class="backup-btn" onclick="cloudReset()">🗑 УДАЛИТЬ НАСТРОЙКИ</div></div>`;
+<div class="btn-action btn-green" style="flex:1;margin:0;font-size:11px;padding:10px 0" onclick="cloudLogin(false)">ВОЙТИ</div>
+<div class="btn-action btn-blue" style="flex:1;margin:0;font-size:11px;padding:10px 0" onclick="cloudLogin(true)">РЕГИСТРАЦИЯ</div></div>`;
 }else{
 inner=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
 <div><div style="color:var(--ok2);font-size:11px;font-weight:600">✓ ${esc((CL.user.email||""))}</div>
