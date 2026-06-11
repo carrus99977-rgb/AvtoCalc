@@ -159,12 +159,6 @@ display:flex;justify-content:space-between;align-items:center}
 .bulk-apply{padding:8px 12px;border-radius:8px;cursor:pointer;font-size:10px;font-weight:700;
 background:var(--br2);color:var(--t2);border:1px solid var(--key-br);font-family:'Oswald',sans-serif;letter-spacing:1px;white-space:nowrap}
 .bulk-apply:active{transform:scale(.95)}
-.month-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;font-size:11px}
-.month-row+.month-row{border-top:1px solid var(--card2)}
-.month-lbl{color:var(--t3);min-width:70px}
-.month-bar-wrap{flex:1;margin:0 10px;height:8px;background:var(--line2);border-radius:4px;overflow:hidden}
-.month-bar{height:100%;border-radius:4px}
-.month-val{font-weight:700;font-family:'Oswald',sans-serif;font-size:12px;min-width:80px;text-align:right}
 .empty-state{text-align:center;padding:26px 20px;color:var(--t5)}
 .empty-state .em-icon{font-size:40px;margin-bottom:10px}.empty-state .em-text{font-size:12px}
 .confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .15s ease}
@@ -220,6 +214,27 @@ border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:var(
 /* Дата в режиме правки */
 .edit-date{color-scheme:dark}
 body.light .edit-date{color-scheme:light}
+
+/* ===== Графики статистики ===== */
+.chart-info{margin-top:8px;padding:9px 12px;background:var(--deep);border:1px solid var(--br3);
+border-radius:8px;font-size:11px;color:var(--t2);text-align:center}
+.donut-wrap{display:flex;gap:14px;align-items:center}
+.donut-svg{flex:0 0 44%;max-width:170px}
+.cl-legend{flex:1;min-width:0}
+.cl-row{display:flex;align-items:center;gap:7px;padding:5px 4px;border-radius:7px;cursor:pointer;font-size:10px}
+.cl-row.sel{background:var(--input)}
+.cl-dot{flex:0 0 auto;width:9px;height:9px;border-radius:3px}
+.cl-name{flex:1;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-val{flex:0 0 auto;color:var(--t3);font-weight:600;font-size:9.5px}
+.cb-row{display:flex;align-items:center;gap:8px;padding:4px 0}
+.cb-name{flex:0 0 32%;min-width:0;font-size:11px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cb-track{flex:1;height:12px;background:var(--line2);border-radius:6px;overflow:hidden}
+.cb-bar{height:100%;border-radius:6px}
+.cb-bar.pos{background:linear-gradient(90deg,#1e8449,#2ecc71)}
+.cb-bar.neg{background:linear-gradient(90deg,#e74c3c,#c0392b)}
+.cb-val{flex:0 0 auto;min-width:64px;text-align:right;font-size:11px;font-weight:700;font-family:'Oswald',sans-serif}
+.cb-more{text-align:center;color:var(--t5);font-size:10px;padding-top:6px}
+@media (max-width:380px){.donut-wrap{flex-direction:column}.donut-svg{max-width:150px}}
 
 /* ===== Мультивалютность ===== */
 :root{--cur-cny:#f5cba7;--cur-krw:#d7bde2;--cur-jpy:#a3e4d7}
