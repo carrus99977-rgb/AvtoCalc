@@ -228,7 +228,7 @@ if(car.status==="stock"){h+=`<div class="btn-action btn-green" title="Оформ
 h+=`<div class="btn-action btn-blue" title="Название, дата, курсы и суммы" onclick="event.stopPropagation();startCarEdit('${esc(car.id)}')">✏️ ПРАВКА</div>`;
 if(car.status==="stock"){h+=`<div class="btn-action btn-outline" style="flex:0 0 auto;padding:10px 14px" data-tip="В калькулятор" aria-label="Скопировать в калькулятор" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋</div>`}
 else{h+=`<div class="btn-action btn-outline" title="Вернуть на склад" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
-h+=`<div class="btn-action btn-yellow tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Сохранить чек" aria-label="Сохранить чек (картинку)" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">🧾</div>
+h+=`<div class="btn-action btn-yellow tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Скачать чек себе" aria-label="Скачать чек себе" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">⬇️</div>
 <div class="btn-action btn-blue tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Поделиться чеком" aria-label="Поделиться чеком" onclick="event.stopPropagation();carShare('${esc(car.id)}')">📤</div>
 <div class="btn-action btn-red tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Удалить машину" aria-label="Удалить машину" onclick="event.stopPropagation();delCar('${esc(car.id)}')">🗑</div></div>`;
 if(S.carReceipts[car.id])h+=`<div class="saved-preview"><p>✅ ЧЕК СОХРАНЁН — ЗАЖМИТЕ ДЛЯ КОПИРОВАНИЯ</p><img src="${S.carReceipts[car.id]}" alt="Чек"></div>`;

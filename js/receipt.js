@@ -19,7 +19,7 @@ if(hs){h+=`<div class="r-dash"></div>
 h+=`<div class="r-dash"></div><div class="r-footer">СПАСИБО ЗА РАСЧЁТ!<br>★ ★ ★</div><div class="perf-bottom"></div></div>
 <svg class="torn-edge" width="100%" height="16" viewBox="0 0 380 16" preserveAspectRatio="none">
 <path d="${Array.from({length:38},(_,i)=>`${i===0?"M":"L"}${i*10},${i%2===0?0:12}`).join(" ")} L380,0 L380,16 L0,16 Z" fill="#fef9e7"/></svg>
-<div class="btn-save" onclick="saveCalcReceipt()">💾 СОХРАНИТЬ ЧЕК</div>
+<div class="btn-save" onclick="saveCalcReceipt()">⬇️ СКАЧАТЬ ЧЕК</div>
 <div class="btn-save btn-share" onclick="shareCalcReceipt()">📤 ПОДЕЛИТЬСЯ ЧЕКОМ</div>
 ${S.receiptImage?`<div class="saved-preview" id="saved-img"><p>✅ ЗАЖМИТЕ КАРТИНКУ ДЛЯ СОХРАНЕНИЯ</p><img src="${S.receiptImage}" alt="Чек"></div>`:""}</div>`;
 return h}
