@@ -34,6 +34,17 @@ const u=document.getElementById("cl-url"),k=document.getElementById("cl-key");
 if(!u||!k||!u.value.trim()||!k.value.trim()){alert("Заполни оба поля");return}
 CL.url=u.value.trim();CL.key=k.value.trim();saveCloudCfg();CL.showSetup=false;initCloud();render()}
 
+// Перевод технических ошибок Supabase в понятный текст
+function humanAuthError(m){m=String(m||"");
+if(/load failed|failed to fetch|network|timeout|fetch/i.test(m))
+return "нет связи с облаком. Проверь интернет (попробуй сменить Wi-Fi/LTE, выключить VPN) и нажми ещё раз — сервер мог «спать» и уже проснулся";
+if(/invalid login credentials/i.test(m))return "неверная почта или пароль";
+if(/email not confirmed/i.test(m))return "почта не подтверждена — найди письмо и перейди по ссылке";
+if(/already registered/i.test(m))return "такая почта уже зарегистрирована — жми ВОЙТИ";
+if(/at least 6 characters/i.test(m))return "пароль минимум 6 символов";
+if(/rate limit|too many/i.test(m))return "слишком много попыток — подожди минуту";
+return m||"проверь данные"}
+
 function cloudLogin(reg){
 const e=document.getElementById("cl-email"),p=document.getElementById("cl-pass");
 if(!e||!p||!e.value.trim()||!p.value){alert("Введи почту и пароль");return}
@@ -43,9 +54,10 @@ setStatus(reg?"регистрация...":"вход...");
 const cred={email:e.value.trim(),password:p.value};
 const fn=reg?CL.sb.auth.signUp(cred):CL.sb.auth.signInWithPassword(cred);
 fn.then(({data,error})=>{
-if(error){setStatus("ошибка: "+(error.message||""));alert("Ошибка: "+(error.message||"проверь данные"));return}
+if(error){setStatus("ошибка входа");alert("Ошибка: "+humanAuthError(error.message));return}
 if(reg&&data&&data.user&&!data.session){setStatus("проверь почту");alert("Письмо отправлено — подтверди почту и нажми Войти");return}
-CL.user=(data&&data.user)||null;setStatus("вход выполнен");fullSync();render()})}
+CL.user=(data&&data.user)||null;setStatus("вход выполнен");fullSync();render()})
+.catch(err=>{setStatus("нет связи");alert("Ошибка: "+humanAuthError(err&&err.message))})}
 
 function cloudLogout(){if(CL.sb)CL.sb.auth.signOut();CL.user=null;setStatus("вышел");render()}
 function cloudReset(){showConfirm("Удалить настройки облака с этого устройства? (данные в облаке останутся)",()=>{
