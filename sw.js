@@ -1,22 +1,26 @@
-// АвтоКальк — service worker: приложение работает без интернета
-const CACHE = "avtokalk-v15";
+// АвтоКальк — service worker: приложение работает без интернета.
+// V — версия релиза: при каждом обновлении меняется здесь и в ?v=N в index.html.
+const V = "16";
+const CACHE = "avtokalk-v" + V;
 const FILES = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./js/core.js",
-  "./js/cbr.js",
-  "./js/export.js",
-  "./js/cloud.js",
-  "./js/calc.js",
-  "./js/warehouse.js",
-  "./js/stats.js",
-  "./js/receipt.js",
-  "./js/main.js",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
-  "./apple-touch-icon.png"
+  "./apple-touch-icon.png",
+  ...[
+    "styles.css",
+    "js/core.js",
+    "js/cbr.js",
+    "js/export.js",
+    "js/cloud.js",
+    "js/calc.js",
+    "js/warehouse.js",
+    "js/stats.js",
+    "js/receipt.js",
+    "js/main.js"
+  ].map(f => "./" + f + "?v=" + V)
 ];
 
 self.addEventListener("install", e => {
@@ -39,7 +43,9 @@ self.addEventListener("fetch", e => {
   // при ошибке падают честно, не подменяются протухшим кэшем со статусом 200.
   if (new URL(e.request.url).origin !== self.location.origin) return;
   e.respondWith(
-    fetch(e.request).then(resp => {
+    // cache:"no-cache" — всегда сверяем файл с сервером (ETag/304), чтобы
+    // HTTP-кэш браузера не подсовывал устаревшие js/css после обновления
+    fetch(e.request, { cache: "no-cache" }).then(resp => {
       // в кэш только успешные ответы (resp.ok=false и для 404/500, и для opaque),
       // чтобы страница ошибки не затёрла рабочий файл app shell
       if (resp.ok) {
