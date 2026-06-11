@@ -19,8 +19,9 @@ showReceipt:false,showSettings:true,showProfit:true,sellPrice:"",sellCurrency:"R
 warehouse:[],expandedCar:null,sellingCarId:null,whSearch:"",whSort:"new",
 sellFormPrice:"",sellFormCurr:"RUB",sellFormRate:"",
 editingEntry:null,editValue:"",editCurr:"RUB",editRate:"",
-editingCarId:null,editCarEntries:null,bulkRates:{},
+editingCarId:null,editCarEntries:null,bulkRates:{},editName:"",editDate:"",
 cbrBusy:false,cbrDate:"",cbrInfo:"",
+toast:null,backupHidden:false,
 carReceipts:{},confirmAction:null};
 
 // ===== PERSISTENCE =====
@@ -42,8 +43,10 @@ carName:S.carName,rates:S.rates,activeCur:S.activeCur,
 eurRate:S.rates.EUR,usdRate:S.rates.USD,
 entries:S.entries,curCat:S.curCat,sellPrice:S.sellPrice,sellCurrency:S.sellCurrency}))}catch(e){}}
 
+// При первом запуске (нет сохранённой темы) берём системную; ручной выбор приоритетнее
 S.theme="dark";
-try{S.theme=localStorage.getItem("autoCalc_theme")||"dark"}catch(e){}
+try{const saved=localStorage.getItem("autoCalc_theme");
+S.theme=saved||(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark")}catch(e){}
 function applyTheme(){document.body.classList.toggle("light",S.theme==="light");
 const mt=document.querySelector('meta[name="theme-color"]');
 if(mt)mt.setAttribute("content",S.theme==="light"?"#eef0f5":"#1a1a2e")}
@@ -117,6 +120,31 @@ function carSellRub(car){return toR(parseFloat(car.sellPrice)||0,car.sellCurrenc
 function carSellRate(car){return parseFloat(carSellRates(car)[car.sellCurrency]||0)}
 function carProfit(car){return carSellRub(car)-carCost(car)}
 function daysBetween(d1,d2){try{return Math.max(0,Math.round((new Date(d2)-new Date(d1))/86400000))}catch(e){return 0}}
+
+// ===== ВИБРАЦИЯ (телефон) =====
+function vibrate(ms){try{if(navigator.vibrate)navigator.vibrate(ms||10)}catch(e){}}
+
+// ===== ТОСТ С ОТМЕНОЙ =====
+let _toastTimer=null;
+function showToast(text,actionLabel,actionFn){
+if(_toastTimer){clearTimeout(_toastTimer);_toastTimer=null}
+S.toast={text,actionLabel,actionFn};renderToast();
+_toastTimer=setTimeout(hideToast,5000)}
+function hideToast(){if(_toastTimer){clearTimeout(_toastTimer);_toastTimer=null}S.toast=null;renderToast()}
+function toastAction(){const fn=S.toast&&S.toast.actionFn;hideToast();if(fn)fn()}
+function renderToast(){const el=document.getElementById("toast");if(!el)return;
+if(!S.toast){el.innerHTML="";return}
+el.innerHTML=`<div class="toast"><span class="toast-text">${esc(S.toast.text)}</span>`+
+(S.toast.actionLabel?`<span class="toast-act" onclick="toastAction()">${esc(S.toast.actionLabel)}</span>`:"")+`</div>`}
+
+// ===== ТРЕКИНГ БЭКАПА =====
+function markBackup(){try{localStorage.setItem("autoCalc_lastBackup",String(Date.now()))}catch(e){}}
+function backupNeeded(){
+if(CL.user||!S.warehouse.length||S.backupHidden)return false;
+let last=0;try{last=parseInt(localStorage.getItem("autoCalc_lastBackup")||"0",10)||0}catch(e){}
+// первый запуск без бэкапа — не дёргаем сразу, а заводим отсчёт 7 дней
+if(!last){try{localStorage.setItem("autoCalc_lastBackup",String(Date.now()))}catch(e){}return false}
+return Date.now()-last>7*86400000}
 
 // ===== CONFIRM =====
 function showConfirm(msg,fn){S.confirmAction={msg,fn};renderConfirm()}

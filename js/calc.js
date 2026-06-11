@@ -1,15 +1,18 @@
 // ===== CALC =====
-function digit(d){if(S.display==="0"&&d!==".")S.display=d;else if(d==="."&&S.display.includes("."))return;else S.display+=d;rDisp()}
-function clr(){S.display="0";rDisp()}
-function bsp(){S.display=S.display.length<=1?"0":S.display.slice(0,-1);rDisp()}
-function tri(n){if(S.display!=="0"){S.display+=n;rDisp()}}
-function curClick(cid){const a=parseFloat(S.display)||0;if(a<=0)return;const cat=CATS[S.curCat];
+function digit(d){vibrate(8);if(S.display==="0"&&d!==".")S.display=d;else if(d==="."&&S.display.includes("."))return;else S.display+=d;rDisp()}
+function clr(){vibrate(8);S.display="0";rDisp()}
+function bsp(){vibrate(8);S.display=S.display.length<=1?"0":S.display.slice(0,-1);rDisp()}
+function tri(n){vibrate(8);if(S.display!=="0"){S.display+=n;rDisp()}}
+function curClick(cid){vibrate(14);const a=parseFloat(S.display)||0;if(a<=0)return;const cat=CATS[S.curCat];
 // фиксируем курс на момент добавления позиции
 const rate=cid==="RUB"?"":(S.rates[cid]||"");
 S.entries.push({category:cat.id,label:cat.label,icon:cat.icon,amount:a,currency:cid,rate:rate});
 S.display="0";if(S.curCat<CATS.length-1)S.curCat++;
 S.showReceipt=false;S.receiptImage=null;saveDraft();render()}
-function delEntry(i){S.entries.splice(i,1);S.showReceipt=false;S.receiptImage=null;S.editingEntry=null;saveDraft();render()}
+function delEntry(i){const removed=S.entries[i];S.entries.splice(i,1);
+S.showReceipt=false;S.receiptImage=null;S.editingEntry=null;saveDraft();render();
+showToast("Позиция удалена","Отменить",()=>{
+S.entries.splice(Math.min(i,S.entries.length),0,removed);S.editingEntry=null;saveDraft();render()})}
 function startEdit(i){const e=S.entries[i];S.editingEntry=i;S.editValue=String(e.amount);S.editCurr=e.currency;
 S.editRate=e.rate||(e.currency==="RUB"?"":S.rates[e.currency]||"");render()}
 function cancelEdit(){S.editingEntry=null;render()}

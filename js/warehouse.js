@@ -24,8 +24,14 @@ if(S.sellFormCurr!=="RUB")car.sellRates[S.sellFormCurr]=sRate;
 car.sellEurRate=car.sellRates.EUR||"";car.sellUsdRate=car.sellRates.USD||"";
 car.status="sold";car.sellDate=new Date().toISOString();
 S.sellingCarId=null;saveWH();cloudUpsert(car);render()}
-function delCar(id){showConfirm("Удалить машину из базы?",()=>{S.warehouse=S.warehouse.filter(c=>c.id!==id);cloudDelete(id);
-if(S.expandedCar===id)S.expandedCar=null;delete S.carReceipts[id];saveWH();render()})}
+function delCar(id){showConfirm("Удалить машину из базы?",()=>{
+const idx=S.warehouse.findIndex(c=>c.id===id);if(idx<0)return;
+const removed=S.warehouse[idx];const receipt=S.carReceipts[id];
+S.warehouse.splice(idx,1);cloudDelete(id);
+if(S.expandedCar===id)S.expandedCar=null;delete S.carReceipts[id];saveWH();render();
+showToast("Машина удалена","Отменить",()=>{
+S.warehouse.splice(Math.min(idx,S.warehouse.length),0,removed);
+if(receipt)S.carReceipts[id]=receipt;cloudUpsert(removed);saveWH();render()})})}
 function retStock(id){showConfirm("Вернуть машину на склад? Данные продажи будут стёрты.",()=>{
 const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 car.status="stock";car.sellPrice="";car.sellCurrency="RUB";car.sellDate=null;
@@ -42,8 +48,12 @@ S.entries=JSON.parse(JSON.stringify(car.entries));S.display="0";S.curCat=0;S.sho
 saveDraft();render();window.scrollTo({top:0,behavior:"smooth"})}
 
 // ===== CAR EDIT MODE (per-entry rates and amounts) =====
+// ISO-дата машины → yyyy-mm-dd для input[type=date] (локальный день, без сдвига пояса)
+function carDateInput(car){try{const d=new Date(car.date);if(isNaN(d))return"";
+const p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())}catch(e){return""}}
 function startCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 S.editingCarId=id;S.sellingCarId=null;S.expandedCar=id;
+S.editName=car.name;S.editDate=carDateInput(car);
 const cr=carRates(car);
 S.editCarEntries=car.entries.map(e=>({...e,
 rate:e.rate||(e.currency==="RUB"?"":(cr[e.currency]||""))}));
@@ -52,9 +62,13 @@ if(e.currency!=="RUB"&&!(e.currency in S.bulkRates))S.bulkRates[e.currency]=S.ra
 render()}
 function cancelCarEdit(){S.editingCarId=null;S.editCarEntries=null;render()}
 function saveCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car||!S.editCarEntries)return;
+if(!String(S.editName||"").trim()){alert("Введите название авто");return}
 for(const e of S.editCarEntries){if(!(parseFloat(e.amount)>0)){alert("Проверьте суммы — есть пустые или нулевые");return}
 if(e.currency!=="RUB"&&!(parseFloat(e.rate)>0)){alert("Проверьте курсы — есть пустые");return}}
 car.entries=S.editCarEntries.map(e=>({...e,amount:parseFloat(e.amount),rate:e.currency==="RUB"?"":String(e.rate)}));
+car.name=S.editName.trim();
+// пустую/битую дату не трогаем; иначе фиксируем полдень выбранного дня (без сдвига пояса)
+if(/^\d{4}-\d{2}-\d{2}$/.test(S.editDate||"")){const d=new Date(S.editDate+"T12:00:00");if(!isNaN(d))car.date=d.toISOString()}
 S.editingCarId=null;S.editCarEntries=null;saveWH();cloudUpsert(car);render()}
 function updEditEntry(i,field,val){if(!S.editCarEntries)return;S.editCarEntries[i][field]=val;updEditCost()}
 function updEditCost(){if(!S.editCarEntries)return;
@@ -78,7 +92,7 @@ const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
 const a=document.createElement("a");a.href=URL.createObjectURL(blob);
 a.download="АвтоСклад_бэкап_"+new Date().toLocaleDateString("ru-RU").replace(/\./g,"-")+".json";
 document.body.appendChild(a);a.click();document.body.removeChild(a);
-setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+setTimeout(()=>URL.revokeObjectURL(a.href),1000);markBackup();S.backupHidden=true;render()}
 function importData(){document.getElementById("import-file").click()}
 document.getElementById("import-file").addEventListener("change",function(ev){
 const f=ev.target.files[0];if(!f)return;
@@ -117,8 +131,12 @@ function whHTML(){
 const stk=S.warehouse.filter(c=>c.status==="stock");
 const frozen=stk.reduce((s,c)=>s+carCost(c),0);
 const avgAge=stk.length?Math.round(stk.reduce((s,c)=>s+daysBetween(c.date,new Date()),0)/stk.length):0;
-let h=`<div class="section-divider" id="wh-section"><span>🏭 Склад (${stk.length})</span></div>
-${cloudBoxHTML()}<div class="backup-row">
+let h=`<div class="section-divider" id="wh-section"><span>🏭 Склад (${stk.length})</span></div>`;
+if(backupNeeded())h+=`<div class="backup-warn">
+<span>💾 Давно не сохраняли базу — сделайте бэкап, чтобы не потерять данные.</span>
+<div class="backup-warn-acts"><span class="bw-act" onclick="exportData()">ЭКСПОРТ</span>
+<span class="bw-x" onclick="S.backupHidden=true;render()">✕</span></div></div>`;
+h+=`${cloudBoxHTML()}<div class="backup-row">
 <div class="backup-btn" onclick="exportData()">💾 ЭКСПОРТ БАЗЫ</div>
 <div class="backup-btn" onclick="importData()">📥 ИМПОРТ БАЗЫ</div>
 <div class="backup-btn" onclick="exportCSV()">📊 EXCEL</div></div>`;
@@ -153,7 +171,13 @@ if(exp&&editing&&S.editCarEntries){
 // ===== РЕЖИМ РЕДАКТИРОВАНИЯ КУРСОВ И СУММ =====
 const bulkCurs=Object.keys(S.bulkRates);
 h+=`<div class="wh-detail" onclick="event.stopPropagation()">
-<div style="color:var(--gold);font-size:11px;font-weight:700;margin-bottom:10px;letter-spacing:1px">✏️ РЕДАКТИРОВАНИЕ — КУРСЫ ПО ФАКТУ ОПЛАТЫ</div>`;
+<div style="color:var(--gold);font-size:11px;font-weight:700;margin-bottom:10px;letter-spacing:1px">✏️ РЕДАКТИРОВАНИЕ МАШИНЫ</div>
+<div class="edit-fields" style="margin-bottom:10px">
+<div class="edit-field" style="flex:2"><label class="edit-lbl">НАЗВАНИЕ</label>
+<input type="text" class="edit-input" value="${esc(S.editName)}" oninput="S.editName=this.value"></div>
+<div class="edit-field"><label class="edit-lbl">ДАТА ПОКУПКИ</label>
+<input type="date" class="edit-input edit-date" value="${esc(S.editDate)}" oninput="S.editDate=this.value"></div></div>
+<div style="color:#667;font-size:9px;margin-bottom:6px;letter-spacing:.5px">КУРСЫ ПО ФАКТУ ОПЛАТЫ:</div>`;
 if(bulkCurs.length){
 h+=`<div style="color:#667;font-size:9px;margin-bottom:6px;letter-spacing:.5px">БЫСТРО ПРИМЕНИТЬ КУРС КО ВСЕМ ПОЗИЦИЯМ:</div>`;
 bulkCurs.forEach(c=>{h+=`<div class="bulk-rate-row"><div class="bulk-rate-field">
@@ -201,7 +225,7 @@ ${car.sellDate?`<div class="wh-detail-row"><span class="wh-detail-lbl">📅 Пр
 <span class="wh-detail-val">${dShort(car.sellDate)} · стояла ${daysBetween(car.date,car.sellDate)} дн.</span></div>`:""}`}
 h+=`<div class="wh-actions">`;
 if(car.status==="stock"){h+=`<div class="btn-action btn-green" title="Оформить продажу" onclick="event.stopPropagation();startSell('${esc(car.id)}')">💰 ПРОДАТЬ</div>`}
-h+=`<div class="btn-action btn-blue" title="Изменить курсы и суммы" onclick="event.stopPropagation();startCarEdit('${esc(car.id)}')">✏️ КУРСЫ</div>`;
+h+=`<div class="btn-action btn-blue" title="Название, дата, курсы и суммы" onclick="event.stopPropagation();startCarEdit('${esc(car.id)}')">✏️ ПРАВКА</div>`;
 if(car.status==="stock"){h+=`<div class="btn-action btn-outline" style="flex:0 0 auto;padding:10px 14px" data-tip="В калькулятор" aria-label="Скопировать в калькулятор" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋</div>`}
 else{h+=`<div class="btn-action btn-outline" title="Вернуть на склад" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
 h+=`<div class="btn-action btn-yellow tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Сохранить чек" aria-label="Сохранить чек (картинку)" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">🧾</div>

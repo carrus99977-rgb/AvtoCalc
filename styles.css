@@ -195,6 +195,30 @@ background:var(--br2);color:var(--t2);border:1px solid var(--key-br);font-family
 .saved-preview img{width:100%;border-radius:8px;border:2px solid #27ae60;box-shadow:0 4px 16px rgba(0,0,0,.4)}
 .torn-edge{display:block}
 
+/* ===== Тост с отменой ===== */
+#toast{position:fixed;left:0;right:0;bottom:max(16px,env(safe-area-inset-bottom));z-index:300;
+display:flex;justify-content:center;pointer-events:none;padding:0 16px}
+.toast{pointer-events:auto;display:flex;align-items:center;gap:14px;max-width:420px;width:100%;
+background:var(--card2);color:var(--t1);border:1px solid var(--br2);border-radius:12px;
+padding:13px 16px;font-size:13px;box-shadow:0 8px 28px rgba(0,0,0,.5);animation:slideUp .25s ease}
+.toast-text{flex:1}
+.toast-act{flex:0 0 auto;color:var(--gold);font-weight:700;cursor:pointer;letter-spacing:.5px;
+font-family:'Oswald',sans-serif;text-transform:uppercase;font-size:12px;padding:4px 6px}
+.toast-act:active{transform:scale(.94)}
+
+/* ===== Плашка «сделайте бэкап» ===== */
+.backup-warn{display:flex;align-items:center;gap:10px;background:var(--bk-bg);border:1px solid var(--bk-br);
+border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:var(--t2);line-height:1.4;animation:fadeIn .2s ease}
+.backup-warn>span{flex:1}
+.backup-warn-acts{flex:0 0 auto;display:flex;align-items:center;gap:6px}
+.bw-act{color:var(--gold);font-weight:700;cursor:pointer;font-family:'Oswald',sans-serif;letter-spacing:.5px;font-size:11px;padding:4px 8px;border:1px solid var(--bk-br);border-radius:6px}
+.bw-act:active{transform:scale(.94)}
+.bw-x{color:var(--t4);cursor:pointer;font-size:14px;padding:2px 6px}
+
+/* Дата в режиме правки */
+.edit-date{color-scheme:dark}
+body.light .edit-date{color-scheme:light}
+
 /* ===== Мультивалютность ===== */
 :root{--cur-cny:#f5cba7;--cur-krw:#d7bde2;--cur-jpy:#a3e4d7}
 body.light{--cur-cny:#9c640c;--cur-krw:#6c3483;--cur-jpy:#117a65}

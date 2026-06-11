@@ -87,7 +87,7 @@ const{error:e2}=await CL.sb.from("cars").upsert({id:car.id,data:car,updated_at:n
 if(e2)throw e2;cloudCars.push(car)}
 // 4) облако — источник истины
 S.warehouse=cloudCars.sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-saveWH();setStatus("синхронизировано ✓");render()}
+saveWH();markBackup();setStatus("синхронизировано ✓");render()}
 catch(e){setStatus("ошибка синхронизации")}}
 
 window.addEventListener("online",()=>{flushQueue()});

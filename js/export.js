@@ -34,4 +34,5 @@ const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
 const a=document.createElement("a");a.href=URL.createObjectURL(blob);
 a.download="АвтоСклад_"+new Date().toLocaleDateString("ru-RU").replace(/\./g,"-")+".csv";
 document.body.appendChild(a);a.click();document.body.removeChild(a);
+// CSV — отчёт, не восстановимый бэкап: НЕ глушим напоминание о сохранении базы
 setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
