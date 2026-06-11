@@ -10,28 +10,31 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="АвтоКальк">
 <link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<!-- apple-mobile-web-app-capable устарел: добавляем современный аналог -->
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1a1a2e">
 <title>Авто Калькулятор</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
 <!-- ?v=N — версия файлов: при каждом релизе меняется здесь и в sw.js (const V),
      чтобы кэш браузера не подсовывал устаревшие скрипты -->
-<link rel="stylesheet" href="styles.css?v=19">
+<link rel="stylesheet" href="styles.css?v=20">
 </head>
 <body>
 <div class="container" id="app"></div>
 <div id="confirm-dialog"></div>
 <div id="toast"></div>
 <input type="file" id="import-file" accept=".json" style="display:none">
-<script src="js/core.js?v=19"></script>
-<script src="js/cbr.js?v=19"></script>
-<script src="js/cloud.js?v=19"></script>
-<script src="js/calc.js?v=19"></script>
-<script src="js/warehouse.js?v=19"></script>
-<script src="js/charts.js?v=19"></script>
-<script src="js/stats.js?v=19"></script>
-<script src="js/receipt.js?v=19"></script>
-<script src="js/export.js?v=19"></script>
-<script src="js/main.js?v=19"></script>
+<script src="js/core.js?v=20"></script>
+<script src="js/cbr.js?v=20"></script>
+<script src="js/cloud.js?v=20"></script>
+<script src="js/calc.js?v=20"></script>
+<script src="js/warehouse.js?v=20"></script>
+<script src="js/charts.js?v=20"></script>
+<script src="js/stats.js?v=20"></script>
+<script src="js/receipt.js?v=20"></script>
+<script src="js/export.js?v=20"></script>
+<script src="js/main.js?v=20"></script>
 </body>
 </html>
