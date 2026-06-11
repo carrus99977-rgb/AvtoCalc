@@ -9,8 +9,10 @@ if(a>=1e6)return fmtD(n/1e6,1)+" млн";
 if(a>=1e3)return fmt(Math.round(n/1e3))+" тыс";
 return fmt(n)}
 
-// --- данные: последние 12 месяцев ---
+// --- данные: последние 12 месяцев (мемо в рамках одного рендера: зависит только от S.warehouse) ---
+let _monthsCache=null;
 function monthsData(){
+if(_monthsCache)return _monthsCache;
 const map={};
 S.warehouse.forEach(c=>{if(c.status!=="sold"||!c.sellDate)return;
 const d=new Date(c.sellDate);if(isNaN(d))return;
@@ -21,7 +23,7 @@ for(let i=11;i>=0;i--){
 const d=new Date(now.getFullYear(),now.getMonth()-i,1);
 const k=d.getFullYear()*12+d.getMonth();
 out.push({m:d.getMonth(),y:d.getFullYear(),profit:map[k]?map[k].profit:0,count:map[k]?map[k].count:0})}
-return out}
+return _monthsCache=out}
 
 // --- область просмотра: "all" (всё время) или индекс месяца в окне 12 мес ---
 function scopeMonthMY(){if(S.statScope==null||S.statScope==="all")return null;
@@ -135,5 +137,5 @@ return `<div class="coll-box">${head}
 <div class="coll-body">${rows}${rest>0?`<div class="cb-more">и ещё ${rest} маш.</div>`:""}</div></div>`}
 
 // --- сборка и частичная перерисовка ---
-function chartsInnerHTML(){return monthsChartHTML()+donutChartHTML()+carsChartHTML()}
+function chartsInnerHTML(){_monthsCache=null;return monthsChartHTML()+donutChartHTML()+carsChartHTML()}
 function rCharts(){const el=document.getElementById("charts-wrap");if(el)el.innerHTML=chartsInnerHTML()}

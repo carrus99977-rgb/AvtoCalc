@@ -83,11 +83,11 @@ return{symbol:safe,cls:"",label:safe,cbr:null}}
 // отбрасываются, типы приводятся, битые объекты возвращают null.
 function normalizeEntry(e){
 if(!e||typeof e!=="object")return null;
-if(!isFinite(parseFloat(e.amount)))return null;
+const amt=parseFloat(e.amount);if(!(amt>0))return null; // как в UI: сумма строго > 0 (отсекает 0, отрицательные, NaN)
 // валюта — только латиница 2-6 символов (реальные коды); мусор → RUB
 const cur=(typeof e.currency==="string"&&/^[A-Za-z]{2,6}$/.test(e.currency))?e.currency:"RUB";
 return{category:String(e.category||"other"),label:String(e.label||"Позиция"),
-icon:String(e.icon||"📦"),amount:parseFloat(e.amount),currency:cur,
+icon:String(e.icon||"📦"),amount:amt,currency:cur,
 rate:cur==="RUB"?"":String(e.rate||"")}}
 function safeRates(o){if(!o||typeof o!=="object"||Array.isArray(o))return null;
 const r={};Object.keys(o).forEach(k=>{r[String(k)]=String(o[k]==null?"":o[k])});return r}
@@ -150,9 +150,9 @@ return Date.now()-last>7*86400000}
 // ===== CONFIRM =====
 function showConfirm(msg,fn){S.confirmAction={msg,fn};renderConfirm()}
 function hideConfirm(){S.confirmAction=null;renderConfirm()}
+function confirmYes(){const f=S.confirmAction&&S.confirmAction.fn;hideConfirm();if(f)f()}
 function renderConfirm(){const el=document.getElementById("confirm-dialog");if(!S.confirmAction){el.innerHTML="";return}
 el.innerHTML=`<div class="confirm-overlay" onclick="hideConfirm()"><div class="confirm-box" onclick="event.stopPropagation()">
-<p>${S.confirmAction.msg}</p><div class="confirm-btns">
+<p>${esc(S.confirmAction.msg)}</p><div class="confirm-btns">
 <div class="btn-action btn-outline" onclick="hideConfirm()">ОТМЕНА</div>
-<div class="btn-action btn-red" onclick="window._cY()">ДА</div></div></div></div>`;
-window._cY=()=>{const f=S.confirmAction.fn;hideConfirm();f()}}
+<div class="btn-action btn-red" onclick="confirmYes()">ДА</div></div></div></div>`}
