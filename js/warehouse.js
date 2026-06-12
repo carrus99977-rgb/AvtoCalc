@@ -4,7 +4,7 @@ if(S.entries.length===0){alert("Добавьте хотя бы одну пози
 for(const e of S.entries){if(e.currency!=="RUB"&&!(entryRate(e,S.rates)>0)){alert("Проверьте курсы — есть позиции без курса");return}}
 S.warehouse.unshift({id:uid(),name:S.carName.trim(),date:new Date().toISOString(),
 rates:{...S.rates},eurRate:S.rates.EUR||"",usdRate:S.rates.USD||"",
-entries:JSON.parse(JSON.stringify(S.entries)),
+entries:JSON.parse(JSON.stringify(S.entries)),note:"",
 status:"stock",sellPrice:"",sellCurrency:"RUB",sellDate:null,sellRates:null,sellEurRate:"",sellUsdRate:""});
 saveWH();cloudUpsert(S.warehouse[0]);
 S.carName="";S.entries=[];S.display="0";S.curCat=0;S.showReceipt=false;S.receiptImage=null;S.sellPrice="";
@@ -54,7 +54,7 @@ function carDateInput(car){try{const d=new Date(car.date);if(isNaN(d))return"";
 const p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())}catch(e){return""}}
 function startCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 S.editingCarId=id;S.sellingCarId=null;S.expandedCar=id;
-S.editName=car.name;S.editDate=carDateInput(car);S.editAskPrice=car.askPrice||"";
+S.editName=car.name;S.editDate=carDateInput(car);S.editAskPrice=car.askPrice||"";S.editNote=car.note||"";
 const cr=carRates(car);
 S.editCarEntries=car.entries.map(e=>({...e,
 rate:e.rate||(e.currency==="RUB"?"":(cr[e.currency]||""))}));
@@ -66,8 +66,10 @@ function saveCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car||!S.ed
 if(!String(S.editName||"").trim()){alert("Введите название авто");return}
 for(const e of S.editCarEntries){if(!(parseFloat(e.amount)>0)){alert("Проверьте суммы — есть пустые или нулевые");return}
 if(e.currency!=="RUB"&&!(parseFloat(e.rate)>0)){alert("Проверьте курсы — есть пустые");return}}
-car.entries=S.editCarEntries.map(e=>({...e,amount:parseFloat(e.amount),rate:e.currency==="RUB"?"":String(e.rate)}));
+car.entries=S.editCarEntries.map(e=>{const{_new,...rest}=e;
+return{...rest,amount:parseFloat(e.amount),rate:e.currency==="RUB"?"":String(e.rate)}});
 car.name=S.editName.trim();
+car.note=String(S.editNote||"").trim().slice(0,500);
 const ap=parseFloat(S.editAskPrice);car.askPrice=isFinite(ap)&&ap>0?String(ap):"";
 // пустую/битую дату не трогаем; иначе фиксируем полдень выбранного дня (без сдвига пояса)
 if(/^\d{4}-\d{2}-\d{2}$/.test(S.editDate||"")){const d=new Date(S.editDate+"T12:00:00");if(!isNaN(d))car.date=d.toISOString()}
@@ -76,7 +78,8 @@ function updEditEntry(i,field,val){if(!S.editCarEntries)return;S.editCarEntries[
 function updEditCost(){if(!S.editCarEntries)return;
 const car=S.warehouse.find(c=>c.id===S.editingCarId);if(!car)return;
 const entries=S.editCarEntries.map(e=>({...e,amount:parseFloat(e.amount)||0}));
-const cost=totR(entries,carRates(car));
+// null вместо карты курсов машины: строка без введённого курса честно даёт 0 ₽ в превью
+const cost=totR(entries,null);
 const el=document.getElementById("edit-cost-val");if(el)el.textContent=fmt(cost)+" ₽";
 // разница с исходной
 const orig=carCost(car);const diff=cost-orig;
@@ -86,6 +89,19 @@ del.style.color=diff>0?"#e74c3c":diff<0?"#27ae60":"#556"}}
 function bulkApply(curr){if(!S.editCarEntries)return;
 const v=S.bulkRates[curr];if(!(parseFloat(v)>0)){alert("Введите курс");return}
 S.editCarEntries.forEach(e=>{if(e.currency===curr)e.rate=v});render()}
+
+// ===== ДОБАВЛЕНИЕ РАСХОДА К МАШИНЕ (в режиме правки) =====
+function addEditEntry(){if(!S.editCarEntries)return;
+const cat=CATS.find(c=>c.id==="other")||CATS[CATS.length-1];
+S.editCarEntries.push({_new:true,category:cat.id,label:cat.label,icon:cat.icon,amount:"",currency:"RUB",rate:""});
+render()}
+function rmEditEntry(i){const e=S.editCarEntries&&S.editCarEntries[i];
+if(!e||!e._new)return; // удалять можно только ещё не сохранённые строки
+S.editCarEntries.splice(i,1);render()}
+function setEditEntryCat(i,catId){const c=CATS.find(x=>x.id===catId);const e=S.editCarEntries&&S.editCarEntries[i];
+if(!c||!e)return;e.category=c.id;e.label=c.label;e.icon=c.icon;updEditCost()}
+function setEditEntryCur(i,cur){const e=S.editCarEntries&&S.editCarEntries[i];if(!e||!CUR[cur])return;
+e.currency=cur;e.rate=cur==="RUB"?"":(S.rates[cur]||"");render()}
 
 // ===== BACKUP =====
 function exportData(){
@@ -111,7 +127,8 @@ saveWH();render()})}catch(err){alert("Ошибка чтения файла")}};
 reader.readAsText(f);ev.target.value=""});
 
 // ===== ПОИСК И СОРТИРОВКА =====
-function whMatch(car){const q=S.whSearch.trim().toLowerCase();return !q||car.name.toLowerCase().includes(q)}
+function whMatch(car){const q=S.whSearch.trim().toLowerCase();
+return !q||(car.name+" "+(car.note||"")).toLowerCase().includes(q)}
 function sortStock(list){const l=[...list];
 if(S.whSort==="old")return l.sort((a,b)=>(a.date||"").localeCompare(b.date||""));
 if(S.whSort==="exp")return l.sort((a,b)=>carCost(b)-carCost(a));
@@ -183,6 +200,9 @@ h+=`<div class="wh-detail" onclick="event.stopPropagation()">
 <div class="edit-fields" style="margin-bottom:10px">
 <div class="edit-field"><label class="edit-lbl">ЦЕНА ДЛЯ КЛИЕНТА ₽ (для списка машин, не себестоимость)</label>
 <input type="number" class="edit-input" placeholder="не указана" value="${esc(S.editAskPrice)}" oninput="S.editAskPrice=this.value"></div></div>
+<div class="edit-fields" style="margin-bottom:10px">
+<div class="edit-field"><label class="edit-lbl">ЗАМЕТКА (VIN, комплектация, контакты)</label>
+<textarea class="edit-input edit-area" rows="2" maxlength="500" placeholder="пусто" oninput="S.editNote=this.value">${esc(S.editNote)}</textarea></div></div>
 <div style="color:#667;font-size:9px;margin-bottom:6px;letter-spacing:.5px">КУРСЫ ПО ФАКТУ ОПЛАТЫ:</div>`;
 if(bulkCurs.length){
 h+=`<div style="color:#667;font-size:9px;margin-bottom:6px;letter-spacing:.5px">БЫСТРО ПРИМЕНИТЬ КУРС КО ВСЕМ ПОЗИЦИЯМ:</div>`;
@@ -192,14 +212,32 @@ bulkCurs.forEach(c=>{h+=`<div class="bulk-rate-row"><div class="bulk-rate-field"
 <div class="bulk-apply" onclick="bulkApply('${esc(c)}')">→ ВСЕМ ${curInfo(c).symbol}</div></div>`});
 }
 S.editCarEntries.forEach((e,i)=>{const cm=curInfo(e.currency);
+if(e._new){
+// новая позиция: категория + валюта выбираются
+h+=`<div class="edit-entry-card edit-new"><div class="edit-entry-title" style="display:flex;justify-content:space-between;align-items:center">
+<span>➕ Новый расход</span>
+<span class="entry-act del" style="opacity:.6" onclick="rmEditEntry(${i})">✕</span></div>
+<select class="edit-input edit-select" onchange="setEditEntryCat(${i},this.value)">
+${CATS.map(c=>`<option value="${c.id}" ${e.category===c.id?"selected":""}>${c.icon} ${c.label}</option>`).join("")}</select>
+<div class="profit-curr-row" style="margin:8px 0">
+${["RUB",...S.activeCur].map(c=>`<div class="pcb ${e.currency===c?"a-"+curInfo(c).cls:""}"
+onclick="setEditEntryCur(${i},'${esc(c)}')">${curInfo(c).symbol} ${esc(c)}</div>`).join("")}</div>
+<div class="edit-fields">
+<div class="edit-field"><label class="edit-lbl">СУММА ${cm.symbol}</label>
+<input type="number" class="edit-input" placeholder="0" value="${esc(e.amount)}" oninput="updEditEntry(${i},'amount',this.value)"></div>
+${e.currency!=="RUB"?`<div class="edit-field"><label class="edit-lbl">КУРС ₽</label>
+<input type="number" class="edit-input" value="${esc(e.rate)}" oninput="updEditEntry(${i},'rate',this.value)"></div>`:""}
+</div></div>`;
+}else{
 h+=`<div class="edit-entry-card"><div class="edit-entry-title">${esc(e.icon)} ${esc(e.label)} (${cm.symbol})</div>
 <div class="edit-fields">
 <div class="edit-field"><label class="edit-lbl">СУММА ${cm.symbol}</label>
 <input type="number" class="edit-input" value="${esc(e.amount)}" oninput="updEditEntry(${i},'amount',this.value)"></div>
 ${e.currency!=="RUB"?`<div class="edit-field"><label class="edit-lbl">КУРС ₽</label>
 <input type="number" class="edit-input" value="${esc(e.rate)}" oninput="updEditEntry(${i},'rate',this.value)"></div>`:""}
-</div></div>`});
-const editCost=totR(S.editCarEntries.map(e=>({...e,amount:parseFloat(e.amount)||0})),carRates(car));
+</div></div>`}});
+h+=`<div class="backup-btn" style="margin-bottom:10px" onclick="addEditEntry()">➕ ДОБАВИТЬ РАСХОД</div>`;
+const editCost=totR(S.editCarEntries.map(e=>({...e,amount:parseFloat(e.amount)||0})),null);
 const editDiff=editCost-cost;
 h+=`<div class="edit-cost-preview"><span class="ecp-lbl">СЕБЕСТОИМОСТЬ</span>
 <div style="text-align:right"><div class="ecp-val" id="edit-cost-val">${fmt(editCost)} ₽</div>
@@ -222,6 +260,7 @@ h+=`<div class="wh-detail-row" style="border-top:2px solid var(--br2);padding-to
 if(car.status==="stock"&&parseFloat(car.askPrice)>0)h+=`<div class="wh-detail-row">
 <span class="wh-detail-lbl">💰 Цена для клиента</span>
 <span class="wh-detail-val">${fmt(parseFloat(car.askPrice))} ₽</span></div>`;
+if(car.note)h+=`<div class="wh-note">📝 ${esc(car.note)}</div>`;
 if(car.status==="sold"){const mg=cost>0?(pr/cost)*100:0,ip=pr>=0;
 const sCur=curInfo(car.sellCurrency);
 h+=`<div class="wh-detail-row"><span class="wh-detail-lbl">💰 Продажа</span>

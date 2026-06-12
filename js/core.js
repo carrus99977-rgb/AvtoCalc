@@ -19,7 +19,7 @@ showReceipt:false,showSettings:true,showProfit:true,sellPrice:"",sellCurrency:"R
 warehouse:[],expandedCar:null,sellingCarId:null,whSearch:"",whSort:"new",
 sellFormPrice:"",sellFormCurr:"RUB",sellFormRate:"",
 editingEntry:null,editValue:"",editCurr:"RUB",editRate:"",
-editingCarId:null,editCarEntries:null,bulkRates:{},editName:"",editDate:"",editAskPrice:"",
+editingCarId:null,editCarEntries:null,bulkRates:{},editName:"",editDate:"",editAskPrice:"",editNote:"",targetMarkup:"",
 cbrBusy:false,cbrDate:"",cbrInfo:"",
 toast:null,backupHidden:false,statScope:"all",chartCat:null,
 carReceipts:{},confirmAction:null};
@@ -34,14 +34,15 @@ S.carName=dd.carName||"";
 S.rates=dd.rates?{...DEFAULT_RATES,...dd.rates}:{...DEFAULT_RATES,EUR:dd.eurRate||DEFAULT_RATES.EUR,USD:dd.usdRate||DEFAULT_RATES.USD};
 S.activeCur=Array.isArray(dd.activeCur)&&dd.activeCur.length?dd.activeCur.filter(c=>CUR[c]&&c!=="RUB"):[...DEFAULT_ACTIVE];
 S.entries=(Array.isArray(dd.entries)?dd.entries:[]).map(normalizeEntry).filter(Boolean);
-S.curCat=dd.curCat||0;S.sellPrice=dd.sellPrice||"";
+S.curCat=dd.curCat||0;S.sellPrice=dd.sellPrice||"";S.targetMarkup=dd.targetMarkup||"";
 S.sellCurrency=CUR[dd.sellCurrency]?dd.sellCurrency:"RUB"}}catch(e){}
 }
 function saveWH(){try{localStorage.setItem("autoCalc_wh",JSON.stringify(S.warehouse))}catch(e){}}
 function saveDraft(){try{localStorage.setItem("autoCalc_draft",JSON.stringify({
 carName:S.carName,rates:S.rates,activeCur:S.activeCur,
 eurRate:S.rates.EUR,usdRate:S.rates.USD,
-entries:S.entries,curCat:S.curCat,sellPrice:S.sellPrice,sellCurrency:S.sellCurrency}))}catch(e){}}
+entries:S.entries,curCat:S.curCat,sellPrice:S.sellPrice,sellCurrency:S.sellCurrency,
+targetMarkup:S.targetMarkup}))}catch(e){}}
 
 // При первом запуске (нет сохранённой темы) берём системную; ручной выбор приоритетнее
 S.theme="dark";
@@ -109,7 +110,8 @@ sellDate:c.sellDate||null,
 sellRates,
 sellEurRate:String((sellRates&&sellRates.EUR)||""),
 sellUsdRate:String((sellRates&&sellRates.USD)||""),
-askPrice:(()=>{const ap=parseFloat(c.askPrice);return isFinite(ap)&&ap>0?String(ap):""})()}}
+askPrice:(()=>{const ap=parseFloat(c.askPrice);return isFinite(ap)&&ap>0?String(ap):""})(),
+note:typeof c.note==="string"?c.note.slice(0,500):""}}
 // Карта курсов машины: новый формат — car.rates, старый — eurRate/usdRate
 function carRates(car){return car.rates||{EUR:car.eurRate,USD:car.usdRate}}
 function carSellRates(car){const r={...carRates(car)};

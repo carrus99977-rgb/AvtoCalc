@@ -32,10 +32,36 @@ const el=document.getElementById("pr-results");if(el)el.innerHTML=prHTML(pCalc(t
 function pCalc(cost){const sell=toR(parseFloat(S.sellPrice)||0,S.sellCurrency,S.rates);const pr=sell-cost;
 return{cost,sell,profit:pr,markup:cost>0?(pr/cost)*100:0,margin:sell>0?(pr/sell)*100:0}}
 
-// Включение/выключение валюты в настройках
+// ===== ОБРАТНЫЙ КАЛЬКУЛЯТОР: цена продажи под целевую наценку =====
+function tgtPct(){const p=parseFloat(S.targetMarkup);return isFinite(p)&&p>-100?p:null}
+function targetPrice(cost){const p=tgtPct();
+return(p==null||!(cost>0))?null:cost*(1+p/100)}
+function targetHTML(cost){
+if(tgtPct()==null)return `<span style="color:var(--t5)">введи %</span>`;
+if(!(cost>0))return `<span style="color:var(--t5)">нет себестоимости</span>`;
+const v=targetPrice(cost);
+let s=fmt(v)+" ₽";
+if(S.sellCurrency!=="RUB"){const r=parseFloat(S.rates[S.sellCurrency]);
+if(r>0)s+=` ≈ ${fmt(v/r)} ${curInfo(S.sellCurrency).symbol}`}
+return s}
+function rTarget(){const el=document.getElementById("tgt-out");
+if(el)el.innerHTML=targetHTML(totR(S.entries,S.rates))}
+function applyTarget(){
+if(tgtPct()==null){alert("Введите целевую наценку в %");return}
+const cost=totR(S.entries,S.rates);
+if(!(cost>0)){alert("Себестоимость 0 ₽ — проверьте курсы позиций");return}
+const v=targetPrice(cost);
+let price=v;
+if(S.sellCurrency!=="RUB"){const r=parseFloat(S.rates[S.sellCurrency]);
+if(!(r>0)){alert("Нет курса "+S.sellCurrency+" — введите курс или выберите ₽");return}
+price=v/r}
+S.sellPrice=String(Math.round(price));saveDraft();render()}
+
 // Очистить значения курсов активных валют и дату ЦБ (позиции не трогаем — у них курс зафиксирован)
 function clearRates(){S.activeCur.forEach(c=>S.rates[c]="");
 S.cbrDate="";S.cbrInfo="";saveDraft();render()}
+
+// Включение/выключение валюты в настройках
 
 function togCur(c){const i=S.activeCur.indexOf(c);
 if(i>=0){if(S.activeCur.length<=1){alert("Оставьте хотя бы одну валюту");return}
@@ -77,8 +103,9 @@ ${Object.keys(CUR).filter(c=>c!=="RUB").map(c=>`<div class="cur-chip ${S.activeC
 <div class="cbr-row">
 <input type="date" class="cbr-date" value="${esc(S.cbrDate)}" oninput="S.cbrDate=this.value" title="Дата курса (пусто — сегодня)">
 <div class="cbr-btn" onclick="fetchCbr()">↻ КУРС ЦБ</div>
+<div class="cbr-btn cbr-market" onclick="fetchMarket()" title="Рыночный (обменный) курс — USDT/₽">₿ РЫНОК</div>
 <div class="cbr-btn cbr-clear" onclick="clearRates()" title="Очистить курсы и дату">✕</div></div>
-<div class="rate-hint" id="cbr-info">${S.cbrInfo||"Кнопка подтянет официальный курс ЦБ РФ — на сегодня или на выбранную дату (для оплат задним числом)."}</div>
+<div class="rate-hint" id="cbr-info">${S.cbrInfo||"«КУРС ЦБ» — официальный курс (можно на дату). «₿ РЫНОК» — живой обменный уровень (USDT/₽)."}</div>
 <div class="rate-hint">💡 Курс фиксируется за каждой позицией в момент добавления. Платишь таможню через месяц по новому курсу — поменяй курс здесь перед добавлением позиции, либо отредактируй позицию на складе.</div></div>`:""}</div>
 <div class="categories">${CATS.map((c,i)=>`<div class="cat-btn ${S.curCat===i?"active":""}" onclick="S.curCat=${i};saveDraft();render()">${c.icon} ${c.label}</div>`).join("")}</div>
 <div class="calc-body"><div class="display-box">
@@ -132,6 +159,11 @@ ${S.showProfit?`<div class="profit-body">
 <input type="number" class="profit-input" placeholder="0" value="${esc(S.sellPrice)}" oninput="S.sellPrice=this.value;saveDraft();rProfit()"></div>
 <div class="profit-curr-row">
 ${[...new Set(["RUB",...S.activeCur,S.sellCurrency])].map(c=>`<div class="pcb ${S.sellCurrency===c?"a-"+curInfo(c).cls:""}" onclick="S.sellCurrency='${esc(c)}';saveDraft();render()">${curInfo(c).symbol} ${esc(c)}</div>`).join("")}</div>
+<div class="target-row">
+<label class="target-lbl">🎯 Наценка</label>
+<input type="number" class="profit-input target-inp" placeholder="%" value="${esc(S.targetMarkup)}" oninput="S.targetMarkup=this.value;saveDraft();rTarget()">
+<div class="target-out" id="tgt-out">${targetHTML(t)}</div>
+<div class="bulk-apply" onclick="applyTarget()">→ В ПРОДАЖУ</div></div>
 <div class="pr-box" id="pr-results">${prHTML(pCalc(t))}</div></div>`:""}</div>`}
 
 if(S.showReceipt&&S.entries.length>0)h+=receiptHTML();

@@ -40,3 +40,35 @@ catch(e){S.cbrBusy=false;
 S.cbrInfo="⚠ Не удалось получить курс — проверь интернет или дату";renderCbrInfo()}}
 
 function renderCbrInfo(){const el=document.getElementById("cbr-info");if(el)el.textContent=S.cbrInfo}
+
+// ===== РЫНОЧНЫЙ КУРС (обменный уровень) =====
+// USD: USDT/₽ с CoinGecko (фактический «обменный» уровень), запасной — форекс er-api.
+// EUR: USD_рынок × кросс EUR/USD (er-api). Истории нет — курс только «сейчас».
+async function fetchMarket(){
+if(S.cbrBusy)return;
+S.cbrBusy=true;S.cbrInfo="⏳ Загрузка рыночного курса...";renderCbrInfo();
+let usdRub=null,eurUsd=null,src="USDT";
+try{
+try{
+const r=await fetch("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=rub",
+{signal:AbortSignal.timeout(10000)});
+if(r.ok){const d=await r.json();const v=d&&d.tether&&parseFloat(d.tether.rub);if(v>0)usdRub=v}
+}catch(_){}
+try{
+const r=await fetch("https://open.er-api.com/v6/latest/USD",{signal:AbortSignal.timeout(10000)});
+if(r.ok){const d=await r.json();
+const eur=d&&d.rates&&parseFloat(d.rates.EUR);if(eur>0)eurUsd=1/eur;
+if(!usdRub){const rub=d&&d.rates&&parseFloat(d.rates.RUB);if(rub>0){usdRub=rub;src="форекс"}}}
+}catch(_){}
+if(!usdRub)throw new Error("нет данных");
+S.rates.USD=String(Math.round(usdRub*1e4)/1e4);
+let eurNote="";
+if(eurUsd>0)S.rates.EUR=String(Math.round(usdRub*eurUsd*1e4)/1e4);
+// кросс недоступен: очищаем EUR, чтобы устаревший курс молча не зафиксировался в новые позиции
+else{eurNote=" · EUR недоступен — введи курс вручную";S.rates.EUR=""}
+S.cbrDate=""; // рыночный курс — только текущий момент
+const t=new Date().toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+S.cbrInfo=`✓ Рынок на ${t} · ${src} ${fmtRate(usdRub)}${eurNote}`;
+S.cbrBusy=false;saveDraft();render()}
+catch(e){S.cbrBusy=false;
+S.cbrInfo="⚠ Рыночный курс недоступен — проверь интернет или попробуй ЦБ";renderCbrInfo()}}

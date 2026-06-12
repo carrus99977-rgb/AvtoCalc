@@ -5,7 +5,7 @@ document.getElementById("app").innerHTML=calcHTML()+whHTML()+soldHTML()+statsHTM
 // Физическая клавиатура на десктопе для калькулятора
 window.addEventListener("keydown",e=>{
 const t=e.target;
-if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"||t.isContentEditable))return;
+if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"||t.tagName==="SELECT"||t.isContentEditable))return;
 if(e.metaKey||e.ctrlKey||e.altKey)return;
 if(e.key>="0"&&e.key<="9"){digit(e.key);e.preventDefault()}
 else if(e.key==="."||e.key===","){digit(".");e.preventDefault()}

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <!-- CSP: defense-in-depth. Разрешено ровно то, чем пользуется приложение:
      inline-обработчики, supabase-js (jsdelivr), курсы ЦБ, Supabase, шрифты, data/blob (PNG-чеки) -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co https://www.cbr-xml-daily.ru; manifest-src 'self'; object-src 'none'; base-uri 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co https://www.cbr-xml-daily.ru https://api.coingecko.com https://open.er-api.com; manifest-src 'self'; object-src 'none'; base-uri 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -19,22 +19,22 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
 <!-- ?v=N — версия файлов: при каждом релизе меняется здесь и в sw.js (const V),
      чтобы кэш браузера не подсовывал устаревшие скрипты -->
-<link rel="stylesheet" href="styles.css?v=20">
+<link rel="stylesheet" href="styles.css?v=22">
 </head>
 <body>
 <div class="container" id="app"></div>
 <div id="confirm-dialog"></div>
 <div id="toast"></div>
 <input type="file" id="import-file" accept=".json" style="display:none">
-<script src="js/core.js?v=20"></script>
-<script src="js/cbr.js?v=20"></script>
-<script src="js/cloud.js?v=20"></script>
-<script src="js/calc.js?v=20"></script>
-<script src="js/warehouse.js?v=20"></script>
-<script src="js/charts.js?v=20"></script>
-<script src="js/stats.js?v=20"></script>
-<script src="js/receipt.js?v=20"></script>
-<script src="js/export.js?v=20"></script>
-<script src="js/main.js?v=20"></script>
+<script src="js/core.js?v=22"></script>
+<script src="js/cbr.js?v=22"></script>
+<script src="js/cloud.js?v=22"></script>
+<script src="js/calc.js?v=22"></script>
+<script src="js/warehouse.js?v=22"></script>
+<script src="js/charts.js?v=22"></script>
+<script src="js/stats.js?v=22"></script>
+<script src="js/receipt.js?v=22"></script>
+<script src="js/export.js?v=22"></script>
+<script src="js/main.js?v=22"></script>
 </body>
 </html>
