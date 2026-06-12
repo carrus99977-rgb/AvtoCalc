@@ -15,6 +15,8 @@ else if(e.key==="Escape"){clr();e.preventDefault()}});
 loadAll();
 initCloud();
 render();
+// тихий прогрев курсов (ЦБ + рынок): кнопки будут срабатывать мгновенно
+setTimeout(()=>{try{prefetchRates()}catch(e){}},1200);
 
 if("serviceWorker" in navigator){
   window.addEventListener("load",()=>{
