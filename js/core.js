@@ -111,7 +111,9 @@ sellRates,
 sellEurRate:String((sellRates&&sellRates.EUR)||""),
 sellUsdRate:String((sellRates&&sellRates.USD)||""),
 askPrice:(()=>{const ap=parseFloat(c.askPrice);return isFinite(ap)&&ap>0?String(ap):""})(),
-note:typeof c.note==="string"?c.note.slice(0,500):""}}
+note:typeof c.note==="string"?c.note.slice(0,500):"",
+// метка свежести → канон. UTC Z-форма, чтобы строковое сравнение в слиянии было хронологически верным
+updatedAt:(()=>{const s=c.updatedAt;if(typeof s!=="string"||!s)return"";const d=new Date(s);return isNaN(d)?"":d.toISOString()})()}}
 // Карта курсов машины: новый формат — car.rates, старый — eurRate/usdRate
 function carRates(car){return car.rates||{EUR:car.eurRate,USD:car.usdRate}}
 function carSellRates(car){const r={...carRates(car)};

@@ -4,7 +4,7 @@ if(S.entries.length===0){alert("Добавьте хотя бы одну пози
 for(const e of S.entries){if(e.currency!=="RUB"&&!(entryRate(e,S.rates)>0)){alert("Проверьте курсы — есть позиции без курса");return}}
 S.warehouse.unshift({id:uid(),name:S.carName.trim(),date:new Date().toISOString(),
 rates:{...S.rates},eurRate:S.rates.EUR||"",usdRate:S.rates.USD||"",
-entries:JSON.parse(JSON.stringify(S.entries)),note:"",
+entries:JSON.parse(JSON.stringify(S.entries)),note:"",updatedAt:new Date().toISOString(),
 status:"stock",sellPrice:"",sellCurrency:"RUB",sellDate:null,sellRates:null,sellEurRate:"",sellUsdRate:""});
 saveWH();cloudUpsert(S.warehouse[0]);
 S.carName="";S.entries=[];S.display="0";S.curCat=0;S.showReceipt=false;S.receiptImage=null;S.sellPrice="";
@@ -24,7 +24,7 @@ if(S.sellFormCurr!=="RUB")car.sellRates[S.sellFormCurr]=sRate;
 // зеркала для совместимости со старыми версиями
 car.sellEurRate=car.sellRates.EUR||"";car.sellUsdRate=car.sellRates.USD||"";
 car.status="sold";car.sellDate=new Date().toISOString();
-S.sellingCarId=null;saveWH();cloudUpsert(car);render()}
+S.sellingCarId=null;touch(car);saveWH();cloudUpsert(car);render()}
 function delCar(id){showConfirm("Удалить машину из базы?",()=>{
 const idx=S.warehouse.findIndex(c=>c.id===id);if(idx<0)return;
 const removed=S.warehouse[idx];const receipt=S.carReceipts[id];
@@ -32,12 +32,12 @@ S.warehouse.splice(idx,1);cloudDelete(id);
 if(S.expandedCar===id)S.expandedCar=null;delete S.carReceipts[id];saveWH();render();
 showToast("Машина удалена","Отменить",()=>{
 S.warehouse.splice(Math.min(idx,S.warehouse.length),0,removed);
-if(receipt)S.carReceipts[id]=receipt;cloudUpsert(removed);saveWH();render()})})}
+if(receipt)S.carReceipts[id]=receipt;touch(removed);cloudUpsert(removed);saveWH();render()})})}
 function retStock(id){showConfirm("Вернуть машину на склад? Данные продажи будут стёрты.",()=>{
 const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 car.status="stock";car.sellPrice="";car.sellCurrency="RUB";car.sellDate=null;
 car.sellRates=null;car.sellEurRate="";car.sellUsdRate="";
-saveWH();cloudUpsert(car);render()})}
+touch(car);saveWH();cloudUpsert(car);render()})}
 function togExp(id){S.expandedCar=S.expandedCar===id?null:id;S.sellingCarId=null;
 if(S.editingCarId!==id)S.editingCarId=null;render()}
 function cpToCalc(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
@@ -73,7 +73,7 @@ car.note=String(S.editNote||"").trim().slice(0,500);
 const ap=parseFloat(S.editAskPrice);car.askPrice=isFinite(ap)&&ap>0?String(ap):"";
 // пустую/битую дату не трогаем; иначе фиксируем полдень выбранного дня (без сдвига пояса)
 if(/^\d{4}-\d{2}-\d{2}$/.test(S.editDate||"")){const d=new Date(S.editDate+"T12:00:00");if(!isNaN(d))car.date=d.toISOString()}
-S.editingCarId=null;S.editCarEntries=null;saveWH();cloudUpsert(car);render()}
+S.editingCarId=null;S.editCarEntries=null;touch(car);saveWH();cloudUpsert(car);render()}
 function updEditEntry(i,field,val){if(!S.editCarEntries)return;S.editCarEntries[i][field]=val;updEditCost()}
 function updEditCost(){if(!S.editCarEntries)return;
 const car=S.warehouse.find(c=>c.id===S.editingCarId);if(!car)return;

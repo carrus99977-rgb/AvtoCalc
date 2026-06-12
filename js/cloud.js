@@ -1,5 +1,5 @@
 // ===== CLOUD SYNC (Supabase) =====
-let CL={url:"",key:"",sb:null,user:null,email:"",pass:"",queue:[],busy:false,status:"",showSetup:false};
+let CL={url:"",key:"",sb:null,user:null,email:"",pass:"",queue:[],busy:false,syncing:false,status:"",showSetup:false};
 function loadCloud(){
 try{const c=localStorage.getItem("autoCalc_cloud");if(c){const cc=JSON.parse(c);CL.url=cc.url||"";CL.key=cc.key||""}}catch(e){}
 try{const q=localStorage.getItem("autoCalc_queue");if(q)CL.queue=JSON.parse(q)}catch(e){}}
@@ -77,9 +77,22 @@ function cloudLogout(){if(CL.sb)CL.sb.auth.signOut();CL.user=null;setStatus("в�
 function cloudReset(){showConfirm("Удалить настройки облака с этого устройства? (данные в облаке останутся)",()=>{
 CL.url=SB_URL_DEFAULT;CL.key=SB_KEY_DEFAULT;CL.user=null;CL.sb=null;saveCloudCfg();initCloud();render()})}
 
+// touch — отметить машину как изменённую сейчас (метка свежести для слияния).
+// Зовётся при пользовательской правке; синк-отправка (pushCar) метку НЕ двигает.
+function touch(car){if(car)car.updatedAt=new Date().toISOString()}
+// канон. метки времени для сравнения свежести (сырое облако может быть с офсетом, не Z)
+function tsKey(s){if(typeof s!=="string"||!s)return"";const d=new Date(s);return isNaN(d)?"":d.toISOString()}
+
 function qOp(op){if(!CL.url)return;CL.queue.push(op);saveQueue();flushQueue()}
 function cloudUpsert(car){qOp({t:"u",car:JSON.parse(JSON.stringify(car))})}
-function cloudDelete(id){qOp({t:"d",id})}
+// удаление — мягкое: фиксируем момент, в облако пойдёт надгробие (не delete)
+function cloudDelete(id){qOp({t:"d",id,ts:new Date().toISOString()})}
+
+// upsert машины в облако с ЕЁ меткой времени, без перебивки (для слияния)
+function pushCar(car){return CL.sb.from("cars").upsert({id:car.id,data:car,updated_at:car.updatedAt||new Date().toISOString()})}
+// upsert надгробия: строка остаётся в облаке, помечена удалённой
+function pushTomb(id,ts){const t=ts||new Date().toISOString();
+return CL.sb.from("cars").upsert({id,data:{id,deletedAt:t,updatedAt:t},updated_at:t})}
 
 async function flushQueue(){
 if(CL.busy||!CL.sb||!CL.user||!navigator.onLine||!CL.queue.length)return;
@@ -87,34 +100,54 @@ CL.busy=true;setStatus("синхронизация...");
 try{
 while(CL.queue.length){
 const op=CL.queue[0];
-if(op.t==="u"){const{error}=await CL.sb.from("cars").upsert({id:op.car.id,data:op.car,updated_at:new Date().toISOString()});if(error)throw error}
-else if(op.t==="d"){const{error}=await CL.sb.from("cars").delete().eq("id",op.id);if(error)throw error}
+if(op.t==="u"){const{error}=await pushCar(op.car);if(error)throw error}
+else if(op.t==="d"){const{error}=await pushTomb(op.id,op.ts);if(error)throw error}
 CL.queue.shift();saveQueue()}
 setStatus("синхронизировано ✓")}
 catch(e){setStatus("ошибка сети — повторю позже")}
 CL.busy=false}
 
 async function fullSync(){
-if(!CL.sb||!CL.user||!navigator.onLine)return;
+if(CL.syncing||!CL.sb||!CL.user||!navigator.onLine)return; // не запускаем второй слияние поверх идущего
+CL.syncing=true;
 setStatus("синхронизация...");
 try{
-// 1) отправляем локальные изменения
+// 1) отправляем накопленные локальные операции
 await flushQueue();
-// 2) забираем облако
+// очередь не опустела (busy/flush в полёте) — НЕ сливаемся против устаревшего снимка облака:
+// иначе только что удалённая машина, чьё надгробие ещё в очереди, вернулась бы живой (воскрешение)
+if(CL.queue.length)return;
+// 2) забираем облако (включая надгробия — у них есть data.deletedAt)
 const{data,error}=await CL.sb.from("cars").select("id,data");
 if(error)throw error;
-// данные из облака могут быть произвольными — нормализуем (защита от битых/вредоносных записей)
-const cloudCars=(data||[]).map(r=>normalizeCar(r.data)).filter(Boolean);
-const cloudIds=new Set(cloudCars.map(c=>c.id));
-// 3) машины, которых нет в облаке (созданы офлайн до входа) — отправляем
-const toPush=S.warehouse.filter(c=>!cloudIds.has(c.id));
-for(const car of toPush){
-const{error:e2}=await CL.sb.from("cars").upsert({id:car.id,data:car,updated_at:new Date().toISOString()});
-if(e2)throw e2;cloudCars.push(car)}
-// 4) облако — источник истины
-S.warehouse=cloudCars.sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+const cloudMap=new Map();
+(data||[]).forEach(r=>{const d=r&&r.data;if(d&&d.id)cloudMap.set(String(d.id),d)});
+const localMap=new Map();
+S.warehouse.forEach(c=>localMap.set(String(c.id),c));
+const ids=new Set([...cloudMap.keys(),...localMap.keys()]);
+// 3) слияние по свежести: новее побеждает; надгробие убирает машину
+const result=[],pushes=[];
+ids.forEach(id=>{
+const cd=cloudMap.get(id),lc=localMap.get(id);
+const cloudTomb=!!(cd&&cd.deletedAt);
+const cloudTs=tsKey(cd?(cd.updatedAt||cd.deletedAt||""):"");
+const localTs=tsKey(lc?(lc.updatedAt||""):"");
+if(cd&&lc){
+if(cloudTomb&&cloudTs>=localTs)return;          // удалено в облаке не раньше локальной правки → убрать локально
+if(localTs>cloudTs){result.push(lc);pushes.push(lc);return} // локальная новее → оставить и отправить
+if(cloudTomb)return;                            // облачное надгробие новее → убрать локально
+const n=normalizeCar(cd);result.push(n||lc);    // облачная новее → принять (битую — оставить локальную)
+}else if(cd){
+if(!cloudTomb){const n=normalizeCar(cd);if(n)result.push(n)} // только в облаке (не надгробие) → принять
+}else if(lc){
+result.push(lc);pushes.push(lc);                // только локально → отправить
+}});
+// 4) отправляем «локально-новее» и «только-локально»
+for(const car of pushes){const{error:e2}=await pushCar(car);if(e2)throw e2}
+S.warehouse=result.sort((a,b)=>(b.date||"").localeCompare(a.date||""));
 saveWH();markBackup();setStatus("синхронизировано ✓");render()}
-catch(e){setStatus("ошибка синхронизации")}}
+catch(e){setStatus("ошибка синхронизации")}
+finally{CL.syncing=false}}
 
 window.addEventListener("online",()=>{flushQueue()});
 
