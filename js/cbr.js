@@ -51,22 +51,24 @@ if(S.cbrBusy)return;
 S.cbrBusy=true;S.cbrInfo="⏳ Загрузка рыночного курса...";renderCbrInfo();
 let usdRub=null,eurUsd=null,src="USDT";
 try{
+// кросс EUR/USD не зависит от USD-цепочки — стартуем параллельно, потребляем в конце
+const erP=(async()=>{try{
+const r=await fetch("https://open.er-api.com/v6/latest/USD",{signal:AbortSignal.timeout(10000)});
+if(r.ok)return await r.json()}catch(_){}return null})();
 try{
 const r=await fetch(MARKET_API,{signal:AbortSignal.timeout(12000)});
 if(r.ok){const d=await r.json();const v=d&&parseFloat(d.usd);
-if(v>0){usdRub=v;src="BestChange нал→USDT"}}
+// принимаем только свежий ответ (защита от любого промежуточного кэша)
+if(v>0&&(!d.ts||Date.now()-d.ts<36e5)){usdRub=v;src="BestChange нал→USDT"}}
 }catch(_){}
 if(!usdRub)try{
 const r=await fetch("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=rub",
 {signal:AbortSignal.timeout(10000)});
 if(r.ok){const d=await r.json();const v=d&&d.tether&&parseFloat(d.tether.rub);if(v>0){usdRub=v;src="биржа USDT"}}
 }catch(_){}
-try{
-const r=await fetch("https://open.er-api.com/v6/latest/USD",{signal:AbortSignal.timeout(10000)});
-if(r.ok){const d=await r.json();
-const eur=d&&d.rates&&parseFloat(d.rates.EUR);if(eur>0)eurUsd=1/eur;
-if(!usdRub){const rub=d&&d.rates&&parseFloat(d.rates.RUB);if(rub>0){usdRub=rub;src="форекс"}}}
-}catch(_){}
+const er=await erP;
+if(er){const eur=er.rates&&parseFloat(er.rates.EUR);if(eur>0)eurUsd=1/eur;
+if(!usdRub){const rub=er.rates&&parseFloat(er.rates.RUB);if(rub>0){usdRub=rub;src="форекс"}}}
 if(!usdRub)throw new Error("нет данных");
 S.rates.USD=String(Math.round(usdRub*1e4)/1e4);
 let eurNote="";

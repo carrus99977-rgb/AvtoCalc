@@ -8,8 +8,10 @@ const TO_ID = 10;   // Tether TRC20 (USDT)
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*"); // курс публичный — пусть работает и с GitHub Pages
+  if (req.method !== "GET") { res.setHeader("Allow", "GET"); res.status(405).end(); return; }
   res.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=1800");
   try {
+    // ВАЖНО: именно http — https://api.bestchange.ru не отвечает (проверено), не «чинить» на https
     const r = await fetch("http://api.bestchange.ru/info.zip", {
       signal: AbortSignal.timeout(25000),
       headers: { "User-Agent": "AvtoCalc/1.0 (+https://avto-calc.vercel.app)" },
@@ -19,6 +21,8 @@ module.exports = async (req, res) => {
     const zip = new AdmZip(buf);
     const entry = zip.getEntry("bm_rates.dat");
     if (!entry) throw new Error("no rates file");
+    // http без TLS: потолок на распакованный размер закрывает OOM от подменённого zip (реальный файл ~75 МБ)
+    if (entry.header.size > 200 * 1024 * 1024) throw new Error("rates file too big: " + entry.header.size);
     const text = entry.getData().toString("latin1"); // в строках только цифры и ;
     const prefix = FROM_ID + ";" + TO_ID + ";";
     const rates = [];

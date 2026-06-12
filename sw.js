@@ -1,6 +1,6 @@
 // АвтоКальк — service worker: приложение работает без интернета.
 // V — версия релиза: при каждом обновлении меняется здесь и в ?v=N в index.html.
-const V = "23";
+const V = "24";
 const CACHE = "avtokalk-v" + V;
 const FILES = [
   "./",
@@ -40,9 +40,13 @@ self.addEventListener("activate", e => {
 // при ошибке должны падать честно, а не получать HTML со статусом 200.
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+  const u = new URL(e.request.url);
   // Cross-origin (курсы ЦБ, Supabase, CDN, шрифты) — мимо кэша: живая сеть,
   // при ошибке падают честно, не подменяются протухшим кэшем со статусом 200.
-  if (new URL(e.request.url).origin !== self.location.origin) return;
+  if (u.origin !== self.location.origin) return;
+  // Серверные функции (/api/market) — тоже мимо кэша: офлайн курс должен
+  // падать честно, а не отдаваться вчерашним со статусом 200 и свежей подписью.
+  if (u.pathname.includes("/api/")) return;
   e.respondWith(
     // cache:"no-cache" — всегда сверяем файл с сервером (ETag/304), чтобы
     // HTTP-кэш браузера не подсовывал устаревшие js/css после обновления
