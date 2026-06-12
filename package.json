@@ -1,0 +1,8 @@
+{
+  "name": "avtocalc",
+  "private": true,
+  "description": "Зависимости только для серверной функции api/market.js (Vercel)",
+  "dependencies": {
+    "adm-zip": "^0.5.16"
+  }
+}

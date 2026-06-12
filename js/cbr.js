@@ -42,17 +42,24 @@ S.cbrInfo="⚠ Не удалось получить курс — проверь 
 function renderCbrInfo(){const el=document.getElementById("cbr-info");if(el)el.textContent=S.cbrInfo}
 
 // ===== РЫНОЧНЫЙ КУРС (обменный уровень) =====
-// USD: USDT/₽ с CoinGecko (фактический «обменный» уровень), запасной — форекс er-api.
+// Цепочка источников USD: 1) BestChange (наличные→USDT, серверная функция на Vercel) —
+// реальный курс обменников; 2) CoinGecko USDT/₽ (биржа); 3) er-api форекс.
 // EUR: USD_рынок × кросс EUR/USD (er-api). Истории нет — курс только «сейчас».
+const MARKET_API="https://avto-calc.vercel.app/api/market";
 async function fetchMarket(){
 if(S.cbrBusy)return;
 S.cbrBusy=true;S.cbrInfo="⏳ Загрузка рыночного курса...";renderCbrInfo();
 let usdRub=null,eurUsd=null,src="USDT";
 try{
 try{
+const r=await fetch(MARKET_API,{signal:AbortSignal.timeout(12000)});
+if(r.ok){const d=await r.json();const v=d&&parseFloat(d.usd);
+if(v>0){usdRub=v;src="BestChange нал→USDT"}}
+}catch(_){}
+if(!usdRub)try{
 const r=await fetch("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=rub",
 {signal:AbortSignal.timeout(10000)});
-if(r.ok){const d=await r.json();const v=d&&d.tether&&parseFloat(d.tether.rub);if(v>0)usdRub=v}
+if(r.ok){const d=await r.json();const v=d&&d.tether&&parseFloat(d.tether.rub);if(v>0){usdRub=v;src="биржа USDT"}}
 }catch(_){}
 try{
 const r=await fetch("https://open.er-api.com/v6/latest/USD",{signal:AbortSignal.timeout(10000)});
