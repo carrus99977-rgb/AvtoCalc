@@ -69,8 +69,7 @@ let _mkCache=null; // {usd, src, ts} — прогретый рыночный к�
 let _mkInflight=null; // общий in-flight запрос: кнопка и прогрев делят одну загрузку
 function loadMarketShared(){
 if(!_mkInflight)_mkInflight=loadMarketData()
-// primary=true только для BestChange; фолбэк (биржа/форекс) пометим, чтобы держать в кэше недолго
-.then(d=>(_mkCache={...d,ts:Date.now(),primary:/^BestChange/.test(d.src||"")}))
+.then(d=>(_mkCache={...d,ts:Date.now()}))
 .finally(()=>{_mkInflight=null});
 return _mkInflight}
 
@@ -90,15 +89,14 @@ S.rates.USD=String(Math.round(d.usd*1e4)/1e4);
 // EUR рыночной кнопкой НЕ трогаем — точный евро берётся через «КУРС ЦБ» (рыночного евро-курса нет)
 S.cbrDate=""; // рыночный курс — только текущий момент
 const t=new Date(d.ts||Date.now()).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
-S.cbrInfo=`✓ Рынок (продажа $) на ${t} · ${fmtRate(d.usd)} ₽`;
+// напоминаем, что EUR этой кнопкой не обновляется (рыночного евро-курса нет — берётся из ЦБ)
+S.cbrInfo=`✓ Рынок (продажа $) на ${t} · ${fmtRate(d.usd)} ₽ · EUR — кнопкой «КУРС ЦБ»`;
 saveDraft();render()}
 
 async function fetchMarket(){
 if(S.cbrBusy)return;
-// BestChange держим в кэше 10 минут; фолбэк (биржа/форекс) — лишь минуту, чтобы при
-// разовом сбое BestChange не залипнуть на бирже на все 10 минут, а перепробовать
-const ttl=(_mkCache&&_mkCache.primary)?RATES_TTL:6e4;
-if(_mkCache&&Date.now()-_mkCache.ts<ttl){applyMarket(_mkCache);return}
+// прогретый рыночный курс держим в кэше 10 минут (как ЦБ); иначе тянем свежий
+if(_mkCache&&Date.now()-_mkCache.ts<RATES_TTL){applyMarket(_mkCache);return}
 S.cbrBusy=true;S.cbrInfo="⏳ Загрузка рыночного курса...";renderCbrInfo();
 try{
 const d=await loadMarketShared();
