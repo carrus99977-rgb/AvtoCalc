@@ -66,7 +66,8 @@ let _mkCache=null; // {usd, eurUsd, src, ts} — прогретый рыночн
 let _mkInflight=null; // общий in-flight запрос: кнопка и прогрев делят одну загрузку
 function loadMarketShared(){
 if(!_mkInflight)_mkInflight=loadMarketData()
-.then(d=>(_mkCache={...d,ts:Date.now()}))
+// primary=true только для BestChange; фолбэк (биржа/форекс) пометим, чтобы держать в кэше недолго
+.then(d=>(_mkCache={...d,ts:Date.now(),primary:/^BestChange/.test(d.src||"")}))
 .finally(()=>{_mkInflight=null});
 return _mkInflight}
 
@@ -114,8 +115,10 @@ saveDraft();render()}
 
 async function fetchMarket(){
 if(S.cbrBusy)return;
-// мгновенно из прогретого кэша (свежее 10 минут)
-if(_mkCache&&Date.now()-_mkCache.ts<RATES_TTL){applyMarket(_mkCache);return}
+// BestChange держим в кэше 10 минут; фолбэк (биржа/форекс) — лишь минуту, чтобы при
+// разовом сбое BestChange не залипнуть на бирже на все 10 минут, а перепробовать
+const ttl=(_mkCache&&_mkCache.primary)?RATES_TTL:6e4;
+if(_mkCache&&Date.now()-_mkCache.ts<ttl){applyMarket(_mkCache);return}
 S.cbrBusy=true;S.cbrInfo="⏳ Загрузка рыночного курса...";renderCbrInfo();
 try{
 const d=await loadMarketShared();

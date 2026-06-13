@@ -9,7 +9,6 @@ const TO_ID = 10;   // Tether TRC20 (USDT)
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*"); // курс публичный — пусть работает и с GitHub Pages
   if (req.method !== "GET") { res.setHeader("Allow", "GET"); res.status(405).end(); return; }
-  res.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=1800");
   try {
     // ВАЖНО: именно http — https://api.bestchange.ru не отвечает (проверено), не «чинить» на https
     const r = await fetch("http://api.bestchange.ru/info.zip", {
@@ -62,6 +61,8 @@ module.exports = async (req, res) => {
     rates.sort((a, b) => a - b);
     const top = rates.slice(0, 5);
     const usd = top[Math.floor((top.length - 1) / 2)]; // медиана топ-5: устойчива к фейковому «лучшему»
+    // кэшируем CDN только УСПЕШНЫЙ ответ — на 10 минут (база качается не чаще)
+    res.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=1800");
     res.status(200).json({
       usd: Math.round(usd * 10000) / 10000,
       offers: rates.length,
@@ -69,6 +70,9 @@ module.exports = async (req, res) => {
       ts: Date.now(),
     });
   } catch (e) {
+    // ошибку кэшируем лишь кратко: разовый сбой источника BestChange не должен залипать
+    // на 10 минут (раньше s-maxage=600 ставился до try и применялся и к 502)
+    res.setHeader("Cache-Control", "s-maxage=30");
     res.status(502).json({ error: String((e && e.message) || e) });
   }
 };
