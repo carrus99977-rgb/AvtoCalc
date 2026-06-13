@@ -1,11 +1,26 @@
-// Vercel serverless: рыночный курс ПРОДАЖИ USDT за рубли (сколько ₽ дают за 1 USDT).
+// Vercel serverless: рыночный курс ПРОДАЖИ доллара и евро за рубли (сколько ₽ дают за 1 $/€).
 // Источник: официальный BestChange API v2 (HTTPS, JSON). Ключ — в переменной окружения
 // BESTCHANGE_KEY (в репозиторий не коммитим, он публичный).
-// Направление 10→21: отдаёшь USDT (10), получаешь СБП ₽ (21). В этом направлении
-// rate = USDT за 1 ₽, поэтому ₽ за 1 USDT = 1/rate. Курс = медиана ВСЕХ офферов (типичный).
-const FROM_ID = 10; // Tether TRC20 (USDT)
-const TO_ID = 21;   // СБП RUB
-const PAIR = FROM_ID + "-" + TO_ID;
+// Все направления → СБП ₽ (21). В этом направлении rate = валюта за 1 ₽, поэтому
+// ₽ за 1 единицу = 1/rate. Курс = медиана офферов (типичный). USD — ликвидный USDT (одно
+// направление); EUR раздроблён по способам — объединяем офферы нескольких в одну медиану.
+const USD_PAIR = "10-21"; // USDT TRC20 → СБП RUB
+// EUR-способы → СБП: SEPA, банк.карта, банк.счёт, Volet, Capitalist, Revolut, Wise, Skrill
+const EUR_PAIRS = ["171-21", "65-21", "70-21", "120-21", "226-21", "193-21", "242-21", "123-21"];
+const ALL_PAIRS = [USD_PAIR, ...EUR_PAIRS].join("+");
+
+function median(xs) { xs.sort((a, b) => a - b); return xs.length ? xs[Math.floor(xs.length / 2)] : 0; }
+// собрать ₽-за-единицу из офферов направления (rate = валюта за ₽ → ₽/единица = 1/rate), фильтр мусора
+function ppuFrom(arr, lo, hi) {
+  const out = [];
+  for (const o of arr || []) {
+    const rate = parseFloat(o && o.rate);
+    if (!(rate > 0)) continue;
+    const v = 1 / rate;
+    if (v > lo && v < hi) out.push(v);
+  }
+  return out;
+}
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*"); // курс публичный — работает и с GitHub Pages
@@ -13,35 +28,32 @@ module.exports = async (req, res) => {
   try {
     const key = process.env.BESTCHANGE_KEY;
     if (!key) throw new Error("BESTCHANGE_KEY not set");
-    const r = await fetch(`https://bestchange.app/v2/${key}/rates/${PAIR}`, {
+    const r = await fetch(`https://bestchange.app/v2/${key}/rates/${ALL_PAIRS}`, {
       signal: AbortSignal.timeout(12000),
       headers: { "User-Agent": "AvtoCalc/1.0 (+https://avto-calc.vercel.app)" },
     });
     if (!r.ok) throw new Error("bestchange v2 http " + r.status);
     const data = await r.json();
-    const arr = (data && data.rates && data.rates[PAIR]) || [];
-    // rate = USDT за 1 ₽ → ₽ за 1 USDT = 1/rate; оставляем только разумные (50..250 ₽/USDT)
-    const ppu = [];
-    for (const o of arr) {
-      const rate = parseFloat(o && o.rate);
-      if (!(rate > 0)) continue;
-      const v = 1 / rate;
-      if (v > 50 && v < 250) ppu.push(v);
-    }
-    if (!ppu.length) throw new Error("no offers");
-    ppu.sort((a, b) => a - b);
-    const usd = ppu[Math.floor(ppu.length / 2)]; // типичный курс продажи — медиана всех офферов
-    // кэшируем CDN только УСПЕШНЫЙ ответ на 10 минут
+    const rates = (data && data.rates) || {};
+    // USD — одно ликвидное направление (USDT→СБП)
+    const usdPpu = ppuFrom(rates[USD_PAIR], 50, 250);
+    if (!usdPpu.length) throw new Error("no usd offers");
+    const usd = median(usdPpu);
+    // EUR — объединяем офферы всех способов в одну медиану (может отсутствовать — не критично)
+    let eurAll = [];
+    for (const p of EUR_PAIRS) eurAll = eurAll.concat(ppuFrom(rates[p], 50, 300));
+    const eur = median(eurAll);
     res.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=1800");
-    res.status(200).json({
+    const out = {
       usd: Math.round(usd * 10000) / 10000,
-      offers: ppu.length,
-      src: "BestChange: продажа USDT",
+      offers: usdPpu.length,
+      src: "BestChange: продажа",
       ts: Date.now(),
-    });
+    };
+    if (eur > 0) { out.eur = Math.round(eur * 10000) / 10000; out.eurOffers = eurAll.length; }
+    res.status(200).json(out);
   } catch (e) {
-    // ошибку кэшируем кратко — разовый сбой источника не залипает на 10 минут
-    res.setHeader("Cache-Control", "s-maxage=30");
+    res.setHeader("Cache-Control", "s-maxage=30"); // ошибку кэшируем кратко
     res.status(502).json({ error: String((e && e.message) || e) });
   }
 };

@@ -73,8 +73,8 @@ if(!_mkInflight)_mkInflight=loadMarketData()
 .finally(()=>{_mkInflight=null});
 return _mkInflight}
 
-// Рыночный курс USD = ПРОДАЖА USDT (медиана офферов BestChange), отдаёт серверная функция.
-// Источник официальный HTTPS, поэтому проверка ±35% и форекс больше не нужны. EUR не считаем.
+// Рыночный курс ПРОДАЖИ доллара и евро (медиана офферов BestChange), отдаёт серверная функция.
+// Источник официальный HTTPS, поэтому проверка ±35% и форекс не нужны. EUR может отсутствовать.
 async function loadMarketData(){
 const r=await fetch(MARKET_API,{signal:AbortSignal.timeout(12000)});
 if(!r.ok)throw new Error("market http "+r.status);
@@ -82,15 +82,16 @@ const d=await r.json();
 const v=parseFloat(d&&d.usd);
 // принимаем только свежий ответ (защита от любого промежуточного кэша)
 if(!(v>0)||(d.ts&&Date.now()-d.ts>=36e5))throw new Error("BestChange недоступен");
-return{usd:v,src:d.src||"BestChange продажа USDT"}}
+const e=parseFloat(d&&d.eur);
+return{usd:v,eur:e>0?e:0,src:d.src||"BestChange продажа"}}
 
 function applyMarket(d){
 S.rates.USD=String(Math.round(d.usd*1e4)/1e4);
-// EUR рыночной кнопкой НЕ трогаем — точный евро берётся через «КУРС ЦБ» (рыночного евро-курса нет)
+if(d.eur>0)S.rates.EUR=String(Math.round(d.eur*1e4)/1e4); // евро тоже рыночный (продажа); если нет — не трогаем
 S.cbrDate=""; // рыночный курс — только текущий момент
 const t=new Date(d.ts||Date.now()).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
-// напоминаем, что EUR этой кнопкой не обновляется (рыночного евро-курса нет — берётся из ЦБ)
-S.cbrInfo=`✓ Рынок (продажа $) на ${t} · ${fmtRate(d.usd)} ₽ · EUR — кнопкой «КУРС ЦБ»`;
+const eurTxt=d.eur>0?` · € ${fmtRate(d.eur)}`:"";
+S.cbrInfo=`✓ Рынок (продажа) ${t} · $ ${fmtRate(d.usd)}${eurTxt} ₽`;
 saveDraft();render()}
 
 async function fetchMarket(){
