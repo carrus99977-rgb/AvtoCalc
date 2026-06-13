@@ -155,14 +155,15 @@ const rates=safeRates(c.rates)||{EUR:numStr(c.eurRate),USD:numStr(c.usdRate)};
 const sellRates=safeRates(c.sellRates);
 return{id:safeId(c.id)||uid(),
 name:(typeof c.name==="string"?c.name:String(c.name||"Без названия")).slice(0,200),
-date:typeof c.date==="string"?c.date:new Date().toISOString(),
+// дату валидируем через Date: битую строку из импорта/облака не пропускаем (иначе daysBetween/сортировки → NaN)
+date:(()=>{const d=new Date(c.date);return isNaN(d)?new Date().toISOString():d.toISOString()})(),
 rates,eurRate:String(rates.EUR||""),usdRate:String(rates.USD||""),
 entries,status,
 sellPrice:status==="sold"?numStr(c.sellPrice):"",
 // валюта продажи — только буквенный код 2-6 симв. (как у позиций): отсекает инъекцию
 // в инлайн-onclick формы продажи (esc не экранирует одинарные кавычки), мусор → RUB
 sellCurrency:(typeof c.sellCurrency==="string"&&/^[A-Za-z]{2,6}$/.test(c.sellCurrency))?c.sellCurrency:"RUB",
-sellDate:c.sellDate||null,
+sellDate:(()=>{if(!c.sellDate)return null;const d=new Date(c.sellDate);return isNaN(d)?null:d.toISOString()})(),
 sellRates,
 sellEurRate:String((sellRates&&sellRates.EUR)||""),
 sellUsdRate:String((sellRates&&sellRates.USD)||""),
@@ -187,7 +188,7 @@ function carCost(car){return totR(car.entries,carRates(car))}
 function carSellRub(car){return toR(parseNum(car.sellPrice)||0,car.sellCurrency,carSellRates(car))}
 function carSellRate(car){return parseNum(carSellRates(car)[car.sellCurrency])||0}
 function carProfit(car){return carSellRub(car)-carCost(car)}
-function daysBetween(d1,d2){try{return Math.max(0,Math.round((new Date(d2)-new Date(d1))/86400000))}catch(e){return 0}}
+function daysBetween(d1,d2){const a=new Date(d1),b=new Date(d2);if(isNaN(a)||isNaN(b))return 0;return Math.max(0,Math.round((b-a)/86400000))}
 
 // ===== ВИБРАЦИЯ (телефон) =====
 function vibrate(ms){try{if(navigator.vibrate)navigator.vibrate(ms||10)}catch(e){}}

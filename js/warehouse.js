@@ -150,8 +150,12 @@ document.body.appendChild(a);a.click();document.body.removeChild(a);
 setTimeout(()=>URL.revokeObjectURL(a.href),1000);markBackup();S.backupHidden=true;render()}
 function importData(){document.getElementById("import-file").click()}
 document.getElementById("import-file").addEventListener("change",function(ev){
-const f=ev.target.files[0];if(!f)return;
+const f=ev.target.files[0];if(!f){return}
+// отклоняем большой файл ДО чтения/парсинга — иначе огромный JSON подвесит вкладку ещё до лимита машин
+const MAX_FILE=20*1024*1024; // 20 МБ — бэкап 5000 машин ≈ единицы МБ
+if(f.size>MAX_FILE){alert("Файл слишком большой ("+Math.round(f.size/1048576)+" МБ). Максимум 20 МБ.");ev.target.value="";return}
 const reader=new FileReader();
+reader.onerror=()=>{alert("Не удалось прочитать файл");ev.target.value=""};
 reader.onload=e=>{try{const data=JSON.parse(e.target.result);
 const rawAll=Array.isArray(data)?data:(data.warehouse||[]);
 const MAX_IMPORT=5000; // потолок против раздутого бэкапа (реальному складу столько не нужно)

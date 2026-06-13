@@ -20,6 +20,8 @@ function startEdit(i){const e=S.entries[i];S.editingEntry=i;S.editValue=String(e
 S.editRate=e.rate||(e.currency==="RUB"?"":S.rates[e.currency]||"");render()}
 function cancelEdit(){S.editingEntry=null;render()}
 function saveEdit(i){const v=parseNum(S.editValue)||0;if(v<=0){alert("Введите сумму");return}
+// не-RUB без курса не сохраняем — иначе позиция молча станет 0 ₽ (как и при добавлении через curClick)
+if(S.editCurr!=="RUB"&&!(parseNum(S.editRate||S.rates[S.editCurr])>0)){alert("Введите курс "+S.editCurr+"/₽ — иначе позиция будет 0 ₽");return}
 S.entries[i].amount=v;S.entries[i].currency=S.editCurr;
 S.entries[i].rate=S.editCurr==="RUB"?"":numStr(S.editRate||S.rates[S.editCurr]||"");
 S.editingEntry=null;S.showReceipt=false;S.receiptImage=null;saveDraft();render()}

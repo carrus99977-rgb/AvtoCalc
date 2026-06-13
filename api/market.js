@@ -25,6 +25,15 @@ function ppuFrom(arr, lo, hi) {
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*"); // курс публичный — работает и с GitHub Pages
   if (req.method !== "GET") { res.setHeader("Allow", "GET"); res.status(405).end(); return; }
+  // Легитимный клиент дёргает чистый /api/market без параметров. Любой query (?cb=…) —
+  // это обход CDN-кэша: отклоняем СРАЗУ (не тратим приватный ключ и лимит BestChange).
+  // Ответ кэшируем надолго, чтобы спам одинаковых «мусорных» URL тоже гасил CDN.
+  const qs = (req.url || "").indexOf("?");
+  if (qs !== -1 && req.url.length > qs + 1) {
+    res.setHeader("Cache-Control", "s-maxage=3600");
+    res.status(400).json({ error: "no query params allowed" });
+    return;
+  }
   try {
     const key = process.env.BESTCHANGE_KEY;
     if (!key) throw new Error("BESTCHANGE_KEY not set");
