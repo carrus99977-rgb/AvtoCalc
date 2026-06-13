@@ -61,11 +61,11 @@ S.cbrInfo="⚠ Не удалось получить курс — проверь 
 function renderCbrInfo(){const el=document.getElementById("cbr-info");if(el)el.textContent=S.cbrInfo}
 
 // ===== РЫНОЧНЫЙ КУРС (обменный уровень) =====
-// Цепочка источников USD: 1) BestChange (наличные→USDT, серверная функция на Vercel) —
-// реальный курс обменников; 2) CoinGecko USDT/₽ (биржа); 3) er-api форекс.
-// EUR: USD_рынок × кросс EUR/USD (er-api). Истории нет — курс только «сейчас».
+// USD: курс ПРОДАЖИ USDT за рубли (медиана офферов) — серверная функция на Vercel поверх
+// официального BestChange API v2 (HTTPS). EUR рыночной кнопкой НЕ трогаем: чистого рыночного
+// евро-курса в обменниках нет, точный евро берётся через «КУРС ЦБ». Истории нет — курс «сейчас».
 const MARKET_API="https://avto-calc.vercel.app/api/market";
-let _mkCache=null; // {usd, eurUsd, src, ts} — прогретый рыночный курс
+let _mkCache=null; // {usd, src, ts} — прогретый рыночный курс
 let _mkInflight=null; // общий in-flight запрос: кнопка и прогрев делят одну загрузку
 function loadMarketShared(){
 if(!_mkInflight)_mkInflight=loadMarketData()
@@ -74,37 +74,23 @@ if(!_mkInflight)_mkInflight=loadMarketData()
 .finally(()=>{_mkInflight=null});
 return _mkInflight}
 
-// Рыночный курс USD берём ТОЛЬКО из BestChange (наличный USDT). Биржу (CoinGecko) и
-// фиатный форекс как курс НЕ подставляем — если BestChange недоступен, бросаем ошибку
-// («рыночный курс недоступен»). Форекс (HTTPS) тянем лишь для EUR-кросса и проверки:
-// BestChange приходит по НЕЗАЩИЩЁННОМУ HTTP, расхождение >35% с фиатом считаем подменой.
+// Рыночный курс USD = ПРОДАЖА USDT (медиана офферов BestChange), отдаёт серверная функция.
+// Источник официальный HTTPS, поэтому проверка ±35% и форекс больше не нужны. EUR не считаем.
 async function loadMarketData(){
-let eurUsd=null;
-const erP=(async()=>{try{
-const r=await fetch("https://open.er-api.com/v6/latest/USD",{signal:AbortSignal.timeout(10000)});
-if(r.ok)return await r.json()}catch(_){}return null})();
-const bcP=(async()=>{try{
 const r=await fetch(MARKET_API,{signal:AbortSignal.timeout(12000)});
-if(r.ok)return await r.json()}catch(_){}return null})();
-const er=await erP;
-const forexUsd=(er&&er.rates&&parseFloat(er.rates.RUB))||0; // ₽ за 1 USD (фиат) — только опора-проверка
-if(er){const eur=er.rates&&parseFloat(er.rates.EUR);if(eur>0)eurUsd=1/eur}
-const d=await bcP;
-if(d){const v=parseFloat(d.usd);
-// свежий + подтверждённый HTTPS-опорой в пределах ±35% — иначе НЕ доверяем (фолбэка нет)
-if(v>0&&(!d.ts||Date.now()-d.ts<36e5)&&forexUsd>0&&Math.abs(v-forexUsd)/forexUsd<=0.35)
-return{usd:v,eurUsd,src:"BestChange нал→USDT"}}
-throw new Error("BestChange недоступен")}
+if(!r.ok)throw new Error("market http "+r.status);
+const d=await r.json();
+const v=parseFloat(d&&d.usd);
+// принимаем только свежий ответ (защита от любого промежуточного кэша)
+if(!(v>0)||(d.ts&&Date.now()-d.ts>=36e5))throw new Error("BestChange недоступен");
+return{usd:v,src:d.src||"BestChange продажа USDT"}}
 
 function applyMarket(d){
 S.rates.USD=String(Math.round(d.usd*1e4)/1e4);
-let eurNote="";
-if(d.eurUsd>0)S.rates.EUR=String(Math.round(d.usd*d.eurUsd*1e4)/1e4);
-// кросс недоступен: очищаем EUR, чтобы устаревший курс молча не зафиксировался в новые позиции
-else{eurNote=" · EUR недоступен — введи курс вручную";S.rates.EUR=""}
+// EUR рыночной кнопкой НЕ трогаем — точный евро берётся через «КУРС ЦБ» (рыночного евро-курса нет)
 S.cbrDate=""; // рыночный курс — только текущий момент
 const t=new Date(d.ts||Date.now()).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
-S.cbrInfo=`✓ Рынок на ${t} · ${d.src} ${fmtRate(d.usd)}${eurNote}`;
+S.cbrInfo=`✓ Рынок (продажа $) на ${t} · ${fmtRate(d.usd)} ₽`;
 saveDraft();render()}
 
 async function fetchMarket(){
