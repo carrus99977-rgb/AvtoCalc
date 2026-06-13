@@ -17,7 +17,7 @@ const DEFAULT_ACTIVE=["EUR","USD"];
 let S={carName:"",rates:{...DEFAULT_RATES},activeCur:[...DEFAULT_ACTIVE],entries:[],curCat:0,display:"0",
 showReceipt:false,showSettings:true,showProfit:true,sellPrice:"",sellCurrency:"RUB",receiptImage:null,
 warehouse:[],expandedCar:null,sellingCarId:null,whSearch:"",whSort:"new",
-sellFormPrice:"",sellFormCurr:"RUB",sellFormRate:"",
+sellFormPrice:"",sellFormCurr:"RUB",sellFormRate:"",sellEditMode:false,
 editingEntry:null,editValue:"",editCurr:"RUB",editRate:"",
 editingCarId:null,editCarEntries:null,bulkRates:{},editName:"",editDate:"",editAskPrice:"",editNote:"",targetMarkup:"",
 cbrBusy:false,cbrDate:"",cbrInfo:"",

@@ -11,20 +11,35 @@ S.carName="";S.entries=[];S.display="0";S.curCat=0;S.showReceipt=false;S.receipt
 S.expandedCar=S.warehouse[0].id;saveDraft();render();
 setTimeout(()=>document.getElementById("wh-section")?.scrollIntoView({behavior:"smooth"}),150)}
 
-function startSell(id){S.sellingCarId=id;S.editingCarId=null;S.sellFormPrice="";S.sellFormCurr="RUB";
+function startSell(id){S.sellingCarId=id;S.editingCarId=null;S.sellEditMode=false;S.sellFormPrice="";S.sellFormCurr="RUB";
 S.sellFormRate="";render()}
-function cancelSell(){S.sellingCarId=null;render()}
-function doSell(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
-if(!parseFloat(S.sellFormPrice)){alert("Введите цену продажи");return}
+function cancelSell(){S.sellingCarId=null;S.sellEditMode=false;render()}
+// общая валидация и запись формы продажи (используют и продажа, и правка цены)
+function validateSaleForm(){
+if(!parseFloat(S.sellFormPrice)){alert("Введите цену продажи");return false}
 const sRate=S.sellFormRate||S.rates[S.sellFormCurr]||"";
-if(S.sellFormCurr!=="RUB"&&!(parseFloat(sRate)>0)){alert("Введите курс продажи");return}
+if(S.sellFormCurr!=="RUB"&&!(parseFloat(sRate)>0)){alert("Введите курс продажи");return false}
+return true}
+function applySaleForm(car){
 car.sellPrice=S.sellFormPrice;car.sellCurrency=S.sellFormCurr;
+const sRate=S.sellFormRate||S.rates[S.sellFormCurr]||"";
 car.sellRates={};
 if(S.sellFormCurr!=="RUB")car.sellRates[S.sellFormCurr]=sRate;
 // зеркала для совместимости со старыми версиями
-car.sellEurRate=car.sellRates.EUR||"";car.sellUsdRate=car.sellRates.USD||"";
-car.status="sold";car.sellDate=new Date().toISOString();
-S.sellingCarId=null;touch(car);saveWH();cloudUpsert(car);render()}
+car.sellEurRate=car.sellRates.EUR||"";car.sellUsdRate=car.sellRates.USD||""}
+function doSell(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
+if(!validateSaleForm())return;
+applySaleForm(car);car.status="sold";car.sellDate=new Date().toISOString();
+S.sellingCarId=null;S.sellEditMode=false;touch(car);saveWH();cloudUpsert(car);render()}
+// изменить цену уже проданной: статус и дату продажи не трогаем
+function startEditSale(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
+S.sellingCarId=id;S.sellEditMode=true;S.editingCarId=null;
+S.sellFormPrice=String(car.sellPrice||"");S.sellFormCurr=car.sellCurrency||"RUB";
+S.sellFormRate=car.sellCurrency!=="RUB"?String(carSellRate(car)||""):"";render()}
+function saveSaleEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car||car.status!=="sold")return;
+if(!validateSaleForm())return;
+applySaleForm(car);
+S.sellingCarId=null;S.sellEditMode=false;touch(car);saveWH();cloudUpsert(car);render()}
 function delCar(id){showConfirm("Удалить машину из базы?",()=>{
 const idx=S.warehouse.findIndex(c=>c.id===id);if(idx<0)return;
 const removed=S.warehouse[idx];const receipt=S.carReceipts[id];
@@ -35,10 +50,11 @@ S.warehouse.splice(Math.min(idx,S.warehouse.length),0,removed);
 if(receipt)S.carReceipts[id]=receipt;touch(removed);cloudUpsert(removed);saveWH();render()})})}
 function retStock(id){showConfirm("Вернуть машину на склад? Данные продажи будут стёрты.",()=>{
 const car=S.warehouse.find(c=>c.id===id);if(!car)return;
+S.sellingCarId=null;S.sellEditMode=false; // закрыть форму правки цены, иначе СОХРАНИТЬ запишет данные продажи на сток
 car.status="stock";car.sellPrice="";car.sellCurrency="RUB";car.sellDate=null;
 car.sellRates=null;car.sellEurRate="";car.sellUsdRate="";
 touch(car);saveWH();cloudUpsert(car);render()})}
-function togExp(id){S.expandedCar=S.expandedCar===id?null:id;S.sellingCarId=null;
+function togExp(id){S.expandedCar=S.expandedCar===id?null:id;S.sellingCarId=null;S.sellEditMode=false;
 if(S.editingCarId!==id)S.editingCarId=null;render()}
 function cpToCalc(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 S.carName=car.name;
@@ -53,7 +69,7 @@ saveDraft();render();window.scrollTo({top:0,behavior:"smooth"})}
 function carDateInput(car){try{const d=new Date(car.date);if(isNaN(d))return"";
 const p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())}catch(e){return""}}
 function startCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
-S.editingCarId=id;S.sellingCarId=null;S.expandedCar=id;
+S.editingCarId=id;S.sellingCarId=null;S.sellEditMode=false;S.expandedCar=id;
 S.editName=car.name;S.editDate=carDateInput(car);S.editAskPrice=car.askPrice||"";S.editNote=car.note||"";
 const cr=carRates(car);
 S.editCarEntries=car.entries.map(e=>({...e,
@@ -275,7 +291,8 @@ h+=`<div class="wh-actions">`;
 if(car.status==="stock"){h+=`<div class="btn-action btn-green" title="Оформить продажу" onclick="event.stopPropagation();startSell('${esc(car.id)}')">💰 ПРОДАТЬ</div>`}
 h+=`<div class="btn-action btn-blue" title="Название, дата, курсы и суммы" onclick="event.stopPropagation();startCarEdit('${esc(car.id)}')">✏️ ПРАВКА</div>`;
 if(car.status==="stock"){h+=`<div class="btn-action btn-outline" style="flex:0 0 auto;padding:10px 14px" data-tip="В калькулятор" aria-label="Скопировать в калькулятор" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋</div>`}
-else{h+=`<div class="btn-action btn-outline" title="Вернуть на склад" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
+else{h+=`<div class="btn-action btn-green" title="Изменить цену продажи" onclick="event.stopPropagation();startEditSale('${esc(car.id)}')">💰 ЦЕНА</div>
+<div class="btn-action btn-outline" title="Вернуть на склад" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
 h+=`<div class="btn-action btn-yellow tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Скачать чек себе" aria-label="Скачать чек себе" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">⬇️</div>
 <div class="btn-action btn-blue tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Поделиться чеком" aria-label="Поделиться чеком" onclick="event.stopPropagation();carShare('${esc(car.id)}')">📤</div>
 <div class="btn-action btn-red tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Удалить машину" aria-label="Удалить машину" onclick="event.stopPropagation();delCar('${esc(car.id)}')">🗑</div></div>`;
@@ -283,15 +300,15 @@ if(S.carReceipts[car.id])h+=`<div class="saved-preview"><p>✅ ЧЕК СОХРА
 h+=`</div>`}
 
 if(selling){h+=`<div class="wh-sell-form" onclick="event.stopPropagation()">
-<div style="color:#888;font-size:11px;font-weight:600;margin-bottom:8px">ОФОРМИТЬ ПРОДАЖУ</div>
+<div style="color:#888;font-size:11px;font-weight:600;margin-bottom:8px">${S.sellEditMode?"ИЗМЕНИТЬ ПРОДАЖУ":"ОФОРМИТЬ ПРОДАЖУ"}</div>
 <input type="number" class="wh-sell-input" placeholder="Цена продажи" value="${esc(S.sellFormPrice)}" oninput="S.sellFormPrice=this.value">
 <div class="profit-curr-row">
 ${[...new Set(["RUB",...S.activeCur,S.sellFormCurr])].map(c=>`<div class="pcb ${S.sellFormCurr===c?"a-"+curInfo(c).cls:""}"
-onclick="S.sellFormCurr='${esc(c)}';S.sellFormRate=S.rates['${esc(c)}']||'';render()">${curInfo(c).symbol} ${esc(c)}</div>`).join("")}</div>
+onclick="if(S.sellFormCurr!=='${esc(c)}'){S.sellFormCurr='${esc(c)}';S.sellFormRate=S.rates['${esc(c)}']||''}render()">${curInfo(c).symbol} ${esc(c)}</div>`).join("")}</div>
 ${S.sellFormCurr!=="RUB"?`<label class="sell-rate-lbl">КУРС НА ДАТУ ПРОДАЖИ ${curInfo(S.sellFormCurr).symbol}/₽</label>
 <input type="number" class="wh-sell-input" value="${esc(S.sellFormRate)}" oninput="S.sellFormRate=this.value">`:""}
 <div style="display:flex;gap:8px;margin-top:4px">
-<div class="btn-action btn-green" style="flex:1;margin:0" onclick="doSell('${esc(car.id)}')">✅ ПРОДАТЬ</div>
+<div class="btn-action btn-green" style="flex:1;margin:0" onclick="${S.sellEditMode?"saveSaleEdit":"doSell"}('${esc(car.id)}')">${S.sellEditMode?"✅ СОХРАНИТЬ":"✅ ПРОДАТЬ"}</div>
 <div class="btn-action btn-outline" style="flex:0 0 auto;margin:0;padding:10px 16px" onclick="cancelSell()">✕</div></div></div>`}
 h+=`</div>`;
 return h}
