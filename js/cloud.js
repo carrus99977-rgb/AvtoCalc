@@ -1,5 +1,7 @@
 // ===== CLOUD SYNC (Supabase) =====
-let CL={url:"",key:"",sb:null,user:null,email:"",pass:"",queue:[],busy:false,syncing:false,pendingFullSync:false,loggingOut:false,localRev:0,status:"",showSetup:false};
+// synced=true ТОЛЬКО после полностью успешного fullSync (локальное == облако). Любая мутация/
+// импорт/ошибка сбрасывают его. На выходе по нему решаем, безопасно ли стирать локальные данные.
+let CL={url:"",key:"",sb:null,user:null,email:"",pass:"",queue:[],busy:false,syncing:false,pendingFullSync:false,loggingOut:false,localRev:0,synced:false,status:"",showSetup:false};
 function loadCloud(){
 try{const c=localStorage.getItem("autoCalc_cloud");if(c){const cc=JSON.parse(c);CL.url=cc.url||"";CL.key=cc.key||""}}catch(e){}
 try{const q=localStorage.getItem("autoCalc_queue");if(q){const a=JSON.parse(q);CL.queue=Array.isArray(a)?a:[]}}catch(e){}}
@@ -76,16 +78,17 @@ alert("❌ Запрос до облака не дошёл"+(ms>14000?" (ждал
 // Выход: СНАЧАЛА сливаем накопленную очередь в облако текущего аккаунта (пока ещё авторизованы),
 // иначе afterAuth при входе другого аккаунта сотрёт несинхронизированные правки → потеря данных.
 function cloudLogout(){
-if(CL.loggingOut)return; // защита от повторного тапа ВЫЙТИ, пока идёт отправка перед выходом
-// выход СТИРАЕТ локальные данные с устройства (на общем устройстве чужой склад виден быть не должен).
-// сначала отправляем несинхронизированное; если не ушло — спрашиваем, прежде чем стереть.
+if(CL.loggingOut)return; // защита от повторного тапа ВЫЙТИ, пока идёт синхронизация
+// Выход стирает локальные данные с устройства (на общем устройстве чужой склад виден быть не должен),
+// НО только если они подтверждённо в облаке (CL.synced). Иначе — досинхронизируем (онлайн) или
+// спрашиваем подтверждение: «очередь пуста» НЕ доказывает, что всё в облаке (импорт/push минуют очередь).
 const out=(wipe)=>{CL.loggingOut=false;if(wipe)clearLocalData();if(CL.sb)CL.sb.auth.signOut();CL.user=null;setStatus("вышел");render()};
-const askWipe=()=>{CL.loggingOut=false;showConfirm("Есть несинхронизированные данные. Выйти и стереть их с устройства? Несохранённое в облако пропадёт. «Отмена» — остаться.",()=>out(true))};
-if(CL.queue.length&&CL.user&&navigator.onLine){
-CL.loggingOut=true;setStatus("отправка перед выходом...");
-flushQueue().then(()=>{CL.queue.length?askWipe():out(true)});return}
-if(CL.queue.length){askWipe();return}
-out(true)}
+const askWipe=()=>{CL.loggingOut=false;showConfirm("Есть несинхронизированные данные — при выходе они пропадут с этого устройства. Выйти и стереть? «Отмена» — остаться (можно сперва синхронизировать).",()=>out(true))};
+if(CL.synced){out(true);return}                       // всё в облаке → стираем безопасно
+if(CL.user&&navigator.onLine){                         // не синхронизировано, но онлайн → синкаем и решаем по факту
+CL.loggingOut=true;setStatus("синхронизация перед выходом...");
+fullSync().then(()=>{CL.loggingOut=false;CL.synced?out(true):askWipe()});return}
+askWipe()}                                              // офлайн / не удалось синхронизировать → спрашиваем
 // Привязка локальных данных к аккаунту-владельцу. На общем устройстве вход под ДРУГИМ
 // аккаунтом не должен сливать чужой локальный склад/очередь в новый аккаунт (утечка):
 // при смене владельца чистим локальные данные и тянем заново из облака нового аккаунта.
@@ -118,7 +121,7 @@ function tsKey(s){if(typeof s!=="string"||!s)return"";const d=new Date(s);return
 
 // localRev++ на каждой локальной мутации (upsert/delete) — fullSync ловит по нему изменения,
 // случившиеся во время сетевого select, и не сливается против устаревшего снимка облака
-function qOp(op){if(!CL.url)return;CL.localRev++;CL.queue.push(op);saveQueue();flushQueue()}
+function qOp(op){if(!CL.url)return;CL.localRev++;CL.synced=false;CL.queue.push(op);saveQueue();flushQueue()}
 function cloudUpsert(car){qOp({t:"u",car:JSON.parse(JSON.stringify(car))})}
 // удаление — мягкое: фиксируем момент, в облако пойдёт надгробие (не delete)
 function cloudDelete(id){qOp({t:"d",id,ts:new Date().toISOString()})}
@@ -192,11 +195,17 @@ if(!cloudTomb){const n=normalizeCar(cd);if(n)result.push(n)} // только в 
 }else if(lc){
 result.push(lc);pushes.push(lc);                // только локально → отправить
 }});
-// 4) отправляем «локально-новее» и «только-локально»
-for(const car of pushes){if(!CL.user||CL.user.id!==acting)return; const{error:e2}=await pushCar(car);if(e2)throw e2}
+// применяем слияние СРАЗУ (синхронно, до сетевых push) — иначе удаление во время push-цикла
+// затрётся снимком result (та же гонка-воскрешение, что и при select)
 S.warehouse=result.sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-saveWH();markBackup();setStatus("синхронизировано ✓");render()}
-catch(e){setStatus("ошибка синхронизации")}
+saveWH();markBackup();render();
+// 4) отправляем «локально-новее» и «только-локально» в облако
+for(const car of pushes){if(!CL.user||CL.user.id!==acting)return; const{error:e2}=await pushCar(car);if(e2)throw e2}
+// мутация во время отправки → состояние снова грязное, дослиёмся; иначе локальное == облако
+if(CL.localRev!==rev0||CL.queue.length){CL.pendingFullSync=true}
+else{CL.synced=true}
+setStatus("синхронизировано ✓")}
+catch(e){CL.synced=false;setStatus("ошибка синхронизации")}
 finally{CL.syncing=false;
 // сменился аккаунт во время синка → чистый синк для нового владельца;
 // либо был отложен (устаревший снимок / занятый flush) и очередь уже пуста → дослиться

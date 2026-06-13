@@ -151,9 +151,10 @@ setTimeout(()=>URL.revokeObjectURL(a.href),1000);markBackup();S.backupHidden=tru
 function importData(){document.getElementById("import-file").click()}
 document.getElementById("import-file").addEventListener("change",function(ev){
 const f=ev.target.files[0];if(!f){return}
-// отклоняем большой файл ДО чтения/парсинга — иначе огромный JSON подвесит вкладку ещё до лимита машин
-const MAX_FILE=20*1024*1024; // 20 МБ — бэкап 5000 машин ≈ единицы МБ
-if(f.size>MAX_FILE){alert("Файл слишком большой ("+Math.round(f.size/1048576)+" МБ). Максимум 20 МБ.");ev.target.value="";return}
+// отклоняем огромный файл ДО чтения/парсинга — иначе он подвесит вкладку ещё до лимита машин.
+// потолок щедрый: даже тяжёлый бэкап 5000 машин (заметки/история) укладывается, цель — отсечь абсурд
+const MAX_FILE=100*1024*1024; // 100 МБ
+if(f.size>MAX_FILE){alert("Файл слишком большой ("+Math.round(f.size/1048576)+" МБ). Максимум 100 МБ.");ev.target.value="";return}
 const reader=new FileReader();
 reader.onerror=()=>{alert("Не удалось прочитать файл");ev.target.value=""};
 reader.onload=e=>{try{const data=JSON.parse(e.target.result);
@@ -169,6 +170,9 @@ cars.forEach(nc=>{const i=S.warehouse.findIndex(c=>c.id===nc.id);
 // не затираем более свежую локальную версию старым бэкапом (сравнение по updatedAt)
 if(i>=0){if(tsKey(nc.updatedAt)>=tsKey(S.warehouse[i].updatedAt))S.warehouse[i]=nc}
 else S.warehouse.push(nc)});
+// импортированные машины минуют очередь — помечаем состояние несинхронизированным,
+// чтобы выход не стёр их, пока fullSync не подтвердит загрузку в облако
+if(typeof CL!=="undefined")CL.synced=false;
 saveWH();render();
 // в облако — через слияние по свежести (а не слепой upsert каждой машины: тот откатывал бы
 // более свежие облачные данные и давал O(n²) пере-сериализацию очереди)
