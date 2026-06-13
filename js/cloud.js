@@ -23,7 +23,7 @@ if(!CL.url||!CL.key)return;
 loadSbLib(()=>{
 try{CL.sb=window.supabase.createClient(CL.url,CL.key);
 CL.sb.auth.getSession().then(({data})=>{
-if(data&&data.session){CL.user=data.session.user;setStatus("вход выполнен");fullSync()}
+if(data&&data.session){CL.user=data.session.user;setStatus("вход выполнен");afterAuth()}
 else{setStatus("нужен вход");renderCloudBox()}});
 }catch(e){setStatus("ошибка настроек")}})}
 
@@ -56,7 +56,7 @@ const fn=reg?CL.sb.auth.signUp(cred):CL.sb.auth.signInWithPassword(cred);
 fn.then(({data,error})=>{
 if(error){setStatus("ошибка входа");alert("Ошибка: "+humanAuthError(error.message));return}
 if(reg&&data&&data.user&&!data.session){setStatus("проверь почту");alert("Письмо отправлено — подтверди почту и нажми Войти");return}
-CL.user=(data&&data.user)||null;setStatus("вход выполнен");fullSync();render()})
+CL.user=(data&&data.user)||null;setStatus("вход выполнен");afterAuth();render()})
 .catch(err=>{setStatus("нет связи");alert("Ошибка: "+humanAuthError(err&&err.message))})}
 
 // Диагностика: доходят ли запросы до облака с ЭТОГО устройства
@@ -74,6 +74,24 @@ alert("⚠️ Сервер отвечает, но с ошибкой "+r.status+"
 alert("❌ Запрос до облака не дошёл"+(ms>14000?" (ждали 15 сек — не дождались)":"")+".\nСкорее всего, сеть блокирует доступ: попробуй переключить Wi-Fi ↔ мобильный интернет или выключить VPN, затем нажми проверку ещё раз.")}}
 
 function cloudLogout(){if(CL.sb)CL.sb.auth.signOut();CL.user=null;setStatus("вышел");render()}
+// Привязка локальных данных к аккаунту-владельцу. На общем устройстве вход под ДРУГИМ
+// аккаунтом не должен сливать чужой локальный склад/очередь в новый аккаунт (утечка):
+// при смене владельца чистим локальные данные и тянем заново из облака нового аккаунта.
+function afterAuth(){
+const uid=CL.user&&CL.user.id;
+if(!uid){fullSync();return}
+let owner="";try{owner=localStorage.getItem("autoCalc_owner")||""}catch(e){}
+if(owner&&owner!==uid){
+S.warehouse=[];CL.queue=[];S.carReceipts={};
+try{localStorage.removeItem("autoCalc_queue")}catch(e){}
+// сбрасываем и черновик калькулятора: на общем устройстве чужой незавершённый расчёт не показываем
+S.carName="";S.entries=[];S.display="0";S.curCat=0;S.sellPrice="";S.targetMarkup="";S.sellCurrency="RUB";
+S.rates={...DEFAULT_RATES};S.activeCur=[...DEFAULT_ACTIVE];
+try{localStorage.removeItem("autoCalc_draft")}catch(e){}
+saveWH();setStatus("новый аккаунт — загрузка из облака");
+}
+try{localStorage.setItem("autoCalc_owner",uid)}catch(e){}
+fullSync()}
 function cloudReset(){showConfirm("Удалить настройки облака с этого устройства? (данные в облаке останутся)",()=>{
 CL.url=SB_URL_DEFAULT;CL.key=SB_KEY_DEFAULT;CL.user=null;CL.sb=null;saveCloudCfg();initCloud();render()})}
 
@@ -96,9 +114,11 @@ return CL.sb.from("cars").upsert({id,data:{id,deletedAt:t,updatedAt:t},updated_a
 
 async function flushQueue(){
 if(CL.busy||!CL.sb||!CL.user||!navigator.onLine||!CL.queue.length)return;
+const acting=CL.user.id; // от чьего имени отправляем (общий клиент CL.sb может перелогиниться)
 CL.busy=true;setStatus("синхронизация...");
 try{
 while(CL.queue.length){
+if(!CL.user||CL.user.id!==acting)break; // вход под другим аккаунтом во время отправки — стоп, не сливаем чужое
 const op=CL.queue[0];
 if(op.t==="u"){const{error}=await pushCar(op.car);if(error)throw error}
 else if(op.t==="d"){const{error}=await pushTomb(op.id,op.ts);if(error)throw error}
@@ -109,6 +129,7 @@ CL.busy=false}
 
 async function fullSync(){
 if(CL.syncing||!CL.sb||!CL.user||!navigator.onLine)return; // не запускаем второй слияние поверх идущего
+const acting=CL.user.id; // аккаунт, от чьего имени синхронизируемся — стережёмся перелогина в процессе
 CL.syncing=true;
 setStatus("синхронизация...");
 try{
@@ -117,9 +138,12 @@ await flushQueue();
 // очередь не опустела (busy/flush в полёте) — НЕ сливаемся против устаревшего снимка облака:
 // иначе только что удалённая машина, чьё надгробие ещё в очереди, вернулась бы живой (воскрешение)
 if(CL.queue.length)return;
+// вход под другим аккаунтом во время отправки — не сливаем локальные данные предыдущего владельца
+if(!CL.user||CL.user.id!==acting)return;
 // 2) забираем облако (включая надгробия — у них есть data.deletedAt)
 const{data,error}=await CL.sb.from("cars").select("id,data");
 if(error)throw error;
+if(!CL.user||CL.user.id!==acting)return; // ещё раз после сетевого ожидания select
 const cloudMap=new Map();
 (data||[]).forEach(r=>{const d=r&&r.data;if(d&&d.id)cloudMap.set(String(d.id),d)});
 const localMap=new Map();
@@ -143,11 +167,12 @@ if(!cloudTomb){const n=normalizeCar(cd);if(n)result.push(n)} // только в 
 result.push(lc);pushes.push(lc);                // только локально → отправить
 }});
 // 4) отправляем «локально-новее» и «только-локально»
-for(const car of pushes){const{error:e2}=await pushCar(car);if(e2)throw e2}
+for(const car of pushes){if(!CL.user||CL.user.id!==acting)return; const{error:e2}=await pushCar(car);if(e2)throw e2}
 S.warehouse=result.sort((a,b)=>(b.date||"").localeCompare(a.date||""));
 saveWH();markBackup();setStatus("синхронизировано ✓");render()}
 catch(e){setStatus("ошибка синхронизации")}
-finally{CL.syncing=false}}
+// сменился аккаунт во время синка — снимаем флаг и запускаем чистый синк для нового владельца
+finally{CL.syncing=false;if(CL.user&&CL.user.id!==acting)fullSync()}}
 
 window.addEventListener("online",()=>{flushQueue()});
 

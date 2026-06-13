@@ -70,15 +70,21 @@ if(typeof v==="number")return isFinite(v)&&Math.abs(v)<=1e12?v:NaN;
 let s=String(v==null?"":v).trim();if(!s)return NaN;
 s=s.replace(/[\s   ]/g,""); // убрать пробелы-разделители тысяч
 const hasC=s.indexOf(",")>-1,hasD=s.indexOf(".")>-1;
-if(hasC&&hasD){ // и точка, и запятая → десятичный тот разделитель, что правее
-s=s.lastIndexOf(",")>s.lastIndexOf(".")?s.replace(/\./g,"").replace(",","."):s.replace(/,/g,"");
-}else if(hasC){ // только запятые: одна → десятичная, несколько → тысячи
-s=s.split(",").length===2?s.replace(",","."):s.replace(/,/g,"");
-}else if(hasD&&s.split(".").length>2){ // несколько точек → разделители тысяч
-s=s.replace(/\./g,"");
+if(hasC&&hasD){ // оба разделителя: правый — десятичный, левый — тысячный (строго группы по 3)
+if(s.lastIndexOf(",")>s.lastIndexOf(".")){ // 1.234,56 — точки тысячные
+if(!/^-?\d{1,3}(\.\d{3})*,\d+$/.test(s))return NaN;s=s.replace(/\./g,"").replace(",",".");
+}else{ // 1,234.56 — запятые тысячные
+if(!/^-?\d{1,3}(,\d{3})*\.\d+$/.test(s))return NaN;s=s.replace(/,/g,"");
 }
-s=s.replace(/[^0-9.\-]/g,""); // оставить только цифры/точку/минус
-if(!s||s==="-"||s===".")return NaN;
+}else if(hasC){ // только запятые: одна → десятичная; несколько → тысячные (строго группы по 3)
+if(s.split(",").length===2)s=s.replace(",",".");
+else{if(!/^-?\d{1,3}(,\d{3})+$/.test(s))return NaN;s=s.replace(/,/g,"");}
+}else if(hasD&&s.split(".").length>2){ // несколько точек → тысячные (строго группы по 3)
+if(!/^-?\d{1,3}(\.\d{3})+$/.test(s))return NaN;s=s.replace(/\./g,"");
+}
+// финальная строгая проверка: ровно одно число (необяз. минус, один десятичный разделитель).
+// мусор («1O00», «123abc», «1-2», «50%», «1.2.3») честно отвергаем как NaN, а не «съедаем»
+if(!/^-?(\d+\.?\d*|\.\d+)$/.test(s))return NaN;
 const n=parseFloat(s);
 return isFinite(n)&&Math.abs(n)<=1e12?n:NaN}
 // Каноничная строка для хранения: "83,45" → "83.45", мусор → "" (всегда точка)
@@ -149,7 +155,9 @@ date:typeof c.date==="string"?c.date:new Date().toISOString(),
 rates,eurRate:String(rates.EUR||""),usdRate:String(rates.USD||""),
 entries,status,
 sellPrice:status==="sold"?numStr(c.sellPrice):"",
-sellCurrency:typeof c.sellCurrency==="string"?c.sellCurrency:"RUB",
+// валюта продажи — только буквенный код 2-6 симв. (как у позиций): отсекает инъекцию
+// в инлайн-onclick формы продажи (esc не экранирует одинарные кавычки), мусор → RUB
+sellCurrency:(typeof c.sellCurrency==="string"&&/^[A-Za-z]{2,6}$/.test(c.sellCurrency))?c.sellCurrency:"RUB",
 sellDate:c.sellDate||null,
 sellRates,
 sellEurRate:String((sellRates&&sellRates.EUR)||""),

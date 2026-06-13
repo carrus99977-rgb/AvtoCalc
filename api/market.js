@@ -17,7 +17,27 @@ module.exports = async (req, res) => {
       headers: { "User-Agent": "AvtoCalc/1.0 (+https://avto-calc.vercel.app)" },
     });
     if (!r.ok) throw new Error("bestchange http " + r.status);
-    const buf = Buffer.from(await r.arrayBuffer());
+    // HTTP без TLS — ответ недоверенный: ограничиваем скачивание ДО полной буферизации,
+    // чтобы подменённый/раздутый ответ не выжрал память функции (реальный zip заметно < 60 МБ).
+    const DL_CAP = 60 * 1024 * 1024;
+    const clen = Number(r.headers.get("content-length") || 0);
+    if (clen > DL_CAP) throw new Error("response too large: " + clen);
+    let buf;
+    if (r.body && typeof r.body.getReader === "function") {
+      const reader = r.body.getReader();
+      const chunks = []; let total = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.length;
+        if (total > DL_CAP) { try { await reader.cancel(); } catch (_) {} throw new Error("response exceeded cap: " + total); }
+        chunks.push(Buffer.from(value));
+      }
+      buf = Buffer.concat(chunks);
+    } else {
+      buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length > DL_CAP) throw new Error("response too large: " + buf.length);
+    }
     const zip = new AdmZip(buf);
     const entry = zip.getEntry("bm_rates.dat");
     if (!entry) throw new Error("no rates file");
