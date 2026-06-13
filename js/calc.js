@@ -103,7 +103,7 @@ ${S.activeCur.map(c=>`<div style="flex:1 1 40%;min-width:120px"><label class="ra
 <div class="cur-chips">
 ${Object.keys(CUR).filter(c=>c!=="RUB").map(c=>`<div class="cur-chip ${S.activeCur.includes(c)?"active":""}" onclick="togCur('${c}')">${CUR[c].symbol} ${c} · ${CUR[c].label}</div>`).join("")}</div>
 <div class="cbr-row">
-<input type="date" class="cbr-date" value="${esc(S.cbrDate||todayStr())}" max="${todayStr()}" oninput="S.cbrDate=this.value" title="Дата курса (по умолчанию — сегодня)">
+<input type="date" class="cbr-date" value="${esc(S.cbrDate)}" max="${todayStr()}" oninput="S.cbrDate=this.value" title="Дата курса (пусто — сегодня)">
 <div class="cbr-btn" onclick="fetchCbr()">↻ КУРС ЦБ</div>
 <div class="cbr-btn cbr-market" onclick="fetchMarket()" title="Рыночный (обменный) курс — USDT/₽">₿ РЫНОК</div>
 <div class="cbr-btn cbr-clear" onclick="clearRates()" title="Очистить курсы и дату">✕</div></div>
