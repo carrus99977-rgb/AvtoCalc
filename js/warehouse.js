@@ -9,7 +9,7 @@ entries:JSON.parse(JSON.stringify(S.entries)),note:"",updatedAt:new Date().toISO
 status:"stock",sellPrice:"",sellCurrency:"RUB",sellDate:null,sellRates:null,sellEurRate:"",sellUsdRate:"",history:[]});
 addHist(S.warehouse[0],"created",fmt(carCost(S.warehouse[0]))+" ₽");
 saveWH();cloudUpsert(S.warehouse[0]);
-S.carName="";S.entries=[];S.display="0";S.curCat=0;S.showReceipt=false;S.receiptImage=null;S.sellPrice="";
+S.carName="";S.entries=[];S.display="0";S.curCat=0;S.showReceipt=false;S.receiptImage=null;S.sellPrice="";S.editingEntry=null;
 S.expandedCar=S.warehouse[0].id;saveDraft();render();
 setTimeout(()=>document.getElementById("wh-section")?.scrollIntoView({behavior:"smooth"}),150)}
 
@@ -67,12 +67,17 @@ function togExp(id){S.expandedCar=S.expandedCar===id?null:id;S.sellingCarId=null
 if(S.editingCarId!==id)S.editingCarId=null;render()}
 function togHist(){S.histOpen=!S.histOpen;render()}
 function cpToCalc(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
+const doCopy=()=>{
 S.carName=car.name;
 const cr=carRates(car);Object.keys(cr).forEach(c=>{if(cr[c])S.rates[c]=cr[c]});
 car.entries.forEach(e=>{if(e.currency!=="RUB"&&CUR[e.currency]&&!S.activeCur.includes(e.currency))S.activeCur.push(e.currency)});
 S.activeCur=Object.keys(CUR).filter(k=>S.activeCur.includes(k));
 S.entries=JSON.parse(JSON.stringify(car.entries));S.display="0";S.curCat=0;S.showReceipt=false;S.sellPrice="";
-saveDraft();render();window.scrollTo({top:0,behavior:"smooth"})}
+S.editingEntry=null; // иначе форма правки позиции «прилипнет» к скопированной машине со старыми значениями
+saveDraft();render();window.scrollTo({top:0,behavior:"smooth"})};
+// незавершённый расчёт в калькуляторе не затираем молча
+if(S.entries.length)showConfirm("Заменить текущий расчёт данными этой машины?",doCopy);
+else doCopy()}
 
 // ===== CAR EDIT MODE (per-entry rates and amounts) =====
 // ISO-дата машины → yyyy-mm-dd для input[type=date] (локальный день, без сдвига пояса)
@@ -148,14 +153,22 @@ document.getElementById("import-file").addEventListener("change",function(ev){
 const f=ev.target.files[0];if(!f)return;
 const reader=new FileReader();
 reader.onload=e=>{try{const data=JSON.parse(e.target.result);
-const raw=Array.isArray(data)?data:(data.warehouse||[]);
-const cars=(Array.isArray(raw)?raw:[]).map(normalizeCar).filter(Boolean);
+const rawAll=Array.isArray(data)?data:(data.warehouse||[]);
+const MAX_IMPORT=5000; // потолок против раздутого бэкапа (реальному складу столько не нужно)
+const raw=(Array.isArray(rawAll)?rawAll:[]).slice(0,MAX_IMPORT);
+const cars=raw.map(normalizeCar).filter(Boolean);
 if(!cars.length){alert("Файл не содержит данных склада");return}
-const skipped=(Array.isArray(raw)?raw.length:0)-cars.length;
-showConfirm(`Найдено машин: ${cars.length}${skipped?` (пропущено битых: ${skipped})`:""}. Добавить к текущему складу? (дубликаты по ID будут обновлены)`,()=>{
+const skipped=raw.length-cars.length;
+const truncated=(Array.isArray(rawAll)?rawAll.length:0)-raw.length;
+showConfirm(`Найдено машин: ${cars.length}${skipped?` (пропущено битых: ${skipped})`:""}${truncated>0?` (обрезано сверх лимита: ${truncated})`:""}. Добавить к текущему складу? (дубликаты по ID — по свежести)`,()=>{
 cars.forEach(nc=>{const i=S.warehouse.findIndex(c=>c.id===nc.id);
-if(i>=0)S.warehouse[i]=nc;else S.warehouse.push(nc);cloudUpsert(nc)});
-saveWH();render()})}catch(err){alert("Ошибка чтения файла")}};
+// не затираем более свежую локальную версию старым бэкапом (сравнение по updatedAt)
+if(i>=0){if(tsKey(nc.updatedAt)>=tsKey(S.warehouse[i].updatedAt))S.warehouse[i]=nc}
+else S.warehouse.push(nc)});
+saveWH();render();
+// в облако — через слияние по свежести (а не слепой upsert каждой машины: тот откатывал бы
+// более свежие облачные данные и давал O(n²) пере-сериализацию очереди)
+if(typeof fullSync==="function")fullSync()})}catch(err){alert("Ошибка чтения файла")}};
 reader.readAsText(f);ev.target.value=""});
 
 // ===== ПОИСК И СОРТИРОВКА =====

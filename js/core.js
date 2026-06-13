@@ -136,8 +136,9 @@ if(!e||typeof e!=="object")return null;
 const amt=parseNum(e.amount);if(!(amt>0))return null; // как в UI: сумма строго > 0 (отсекает 0, отрицательные, NaN); запятые-импорт принимаем
 // валюта — только латиница 2-6 символов (реальные коды); мусор → RUB
 const cur=(typeof e.currency==="string"&&/^[A-Za-z]{2,6}$/.test(e.currency))?e.currency:"RUB";
-return{category:String(e.category||"other"),label:String(e.label||"Позиция"),
-icon:String(e.icon||"📦"),amount:amt,currency:cur,
+// строки из импорта/облака режем по длине (защита от раздутого бэкапа и обрезки в чеке)
+return{category:String(e.category||"other").slice(0,40),label:String(e.label||"Позиция").slice(0,80),
+icon:String(e.icon||"📦").slice(0,8),amount:amt,currency:cur,
 rate:cur==="RUB"?"":numStr(e.rate)}} // курс канонизируем (запятая→точка), мусор→""
 // Карта курсов: значения канонизируем (запятая→точка, мусор→""), чтобы импорт/облако не таскали «грязные» строки
 function safeRates(o){if(!o||typeof o!=="object"||Array.isArray(o))return null;
@@ -148,9 +149,12 @@ const entries=(Array.isArray(c.entries)?c.entries:[]).map(normalizeEntry).filter
 if(!entries.length)return null;
 const status=c.status==="sold"?"sold":"stock";
 const rates=safeRates(c.rates)||{EUR:numStr(c.eurRate),USD:numStr(c.usdRate)};
+// ВАЖНО: не выбрасываем валютную позицию без курса и не роняем из-за неё машину —
+// normalizeCar гоняется на каждом старте, легаси-машина (старые версии без валидации
+// курса) иначе молча исчезла бы. Себестоимость без курса = 0 ₽, но это видно по ⚠ в карточке.
 const sellRates=safeRates(c.sellRates);
 return{id:safeId(c.id)||uid(),
-name:typeof c.name==="string"?c.name:String(c.name||"Без названия"),
+name:(typeof c.name==="string"?c.name:String(c.name||"Без названия")).slice(0,200),
 date:typeof c.date==="string"?c.date:new Date().toISOString(),
 rates,eurRate:String(rates.EUR||""),usdRate:String(rates.USD||""),
 entries,status,

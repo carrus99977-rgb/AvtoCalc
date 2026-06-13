@@ -1,8 +1,8 @@
 // ===== CLOUD SYNC (Supabase) =====
-let CL={url:"",key:"",sb:null,user:null,email:"",pass:"",queue:[],busy:false,syncing:false,status:"",showSetup:false};
+let CL={url:"",key:"",sb:null,user:null,email:"",pass:"",queue:[],busy:false,syncing:false,pendingFullSync:false,loggingOut:false,status:"",showSetup:false};
 function loadCloud(){
 try{const c=localStorage.getItem("autoCalc_cloud");if(c){const cc=JSON.parse(c);CL.url=cc.url||"";CL.key=cc.key||""}}catch(e){}
-try{const q=localStorage.getItem("autoCalc_queue");if(q)CL.queue=JSON.parse(q)}catch(e){}}
+try{const q=localStorage.getItem("autoCalc_queue");if(q){const a=JSON.parse(q);CL.queue=Array.isArray(a)?a:[]}}catch(e){}}
 function saveCloudCfg(){try{localStorage.setItem("autoCalc_cloud",JSON.stringify({url:CL.url,key:CL.key}))}catch(e){}}
 function saveQueue(){try{localStorage.setItem("autoCalc_queue",JSON.stringify(CL.queue))}catch(e){}}
 loadCloud();
@@ -73,7 +73,17 @@ alert("⚠️ Сервер отвечает, но с ошибкой "+r.status+"
 }catch(e){const ms=Date.now()-t0;setStatus("нет связи");
 alert("❌ Запрос до облака не дошёл"+(ms>14000?" (ждали 15 сек — не дождались)":"")+".\nСкорее всего, сеть блокирует доступ: попробуй переключить Wi-Fi ↔ мобильный интернет или выключить VPN, затем нажми проверку ещё раз.")}}
 
-function cloudLogout(){if(CL.sb)CL.sb.auth.signOut();CL.user=null;setStatus("вышел");render()}
+// Выход: СНАЧАЛА сливаем накопленную очередь в облако текущего аккаунта (пока ещё авторизованы),
+// иначе afterAuth при входе другого аккаунта сотрёт несинхронизированные правки → потеря данных.
+function cloudLogout(){
+if(CL.loggingOut)return; // защита от повторного тапа ВЫЙТИ, пока идёт отправка перед выходом
+const finish=()=>{CL.loggingOut=false;if(CL.sb)CL.sb.auth.signOut();CL.user=null;setStatus("вышел");render()};
+const warn=()=>{CL.loggingOut=false;showConfirm("Есть несинхронизированные изменения (нет сети). Выйти всё равно? Они сохранятся только на этом устройстве до входа этим же аккаунтом.",finish)};
+if(CL.queue.length&&CL.user&&navigator.onLine){
+CL.loggingOut=true;setStatus("отправка перед выходом...");
+flushQueue().then(()=>{CL.queue.length?warn():finish()});return}
+if(CL.queue.length){warn();return}
+finish()}
 // Привязка локальных данных к аккаунту-владельцу. На общем устройстве вход под ДРУГИМ
 // аккаунтом не должен сливать чужой локальный склад/очередь в новый аккаунт (утечка):
 // при смене владельца чистим локальные данные и тянем заново из облака нового аккаунта.
@@ -106,8 +116,11 @@ function cloudUpsert(car){qOp({t:"u",car:JSON.parse(JSON.stringify(car))})}
 // удаление — мягкое: фиксируем момент, в облако пойдёт надгробие (не delete)
 function cloudDelete(id){qOp({t:"d",id,ts:new Date().toISOString()})}
 
-// upsert машины в облако с ЕЁ меткой времени, без перебивки (для слияния)
-function pushCar(car){return CL.sb.from("cars").upsert({id:car.id,data:car,updated_at:car.updatedAt||new Date().toISOString()})}
+// upsert машины в облако с ЕЁ меткой времени, без перебивки (для слияния).
+// пустой updatedAt проштамповываем, иначе в облаке метка в data разойдётся с колонкой
+// и машина будет вечно проигрывать сравнения свежести (cloudTs="")
+function pushCar(car){if(!car.updatedAt)car.updatedAt=new Date().toISOString();
+return CL.sb.from("cars").upsert({id:car.id,data:car,updated_at:car.updatedAt})}
 // upsert надгробия: строка остаётся в облаке, помечена удалённой
 function pushTomb(id,ts){const t=ts||new Date().toISOString();
 return CL.sb.from("cars").upsert({id,data:{id,deletedAt:t,updatedAt:t},updated_at:t})}
@@ -125,7 +138,9 @@ else if(op.t==="d"){const{error}=await pushTomb(op.id,op.ts);if(error)throw erro
 CL.queue.shift();saveQueue()}
 setStatus("синхронизировано ✓")}
 catch(e){setStatus("ошибка сети — повторю позже")}
-CL.busy=false}
+CL.busy=false;
+// если во время flush кто-то запросил полное слияние — выполняем его теперь (очередь опустела)
+if(CL.pendingFullSync&&!CL.queue.length&&CL.sb&&CL.user&&navigator.onLine){CL.pendingFullSync=false;fullSync()}}
 
 async function fullSync(){
 if(CL.syncing||!CL.sb||!CL.user||!navigator.onLine)return; // не запускаем второй слияние поверх идущего
@@ -137,7 +152,7 @@ try{
 await flushQueue();
 // очередь не опустела (busy/flush в полёте) — НЕ сливаемся против устаревшего снимка облака:
 // иначе только что удалённая машина, чьё надгробие ещё в очереди, вернулась бы живой (воскрешение)
-if(CL.queue.length)return;
+if(CL.queue.length){if(CL.busy)CL.pendingFullSync=true;return} // flush в полёте — дослиться после него
 // вход под другим аккаунтом во время отправки — не сливаем локальные данные предыдущего владельца
 if(!CL.user||CL.user.id!==acting)return;
 // 2) забираем облако (включая надгробия — у них есть data.deletedAt)
@@ -174,7 +189,9 @@ catch(e){setStatus("ошибка синхронизации")}
 // сменился аккаунт во время синка — снимаем флаг и запускаем чистый синк для нового владельца
 finally{CL.syncing=false;if(CL.user&&CL.user.id!==acting)fullSync()}}
 
-window.addEventListener("online",()=>{flushQueue()});
+// на реконнекте — полное слияние (flush очереди + merge по свежести), а не только flush:
+// иначе импортированные офлайн машины (они не в очереди, а в складе) не уедут в облако
+window.addEventListener("online",()=>{fullSync()});
 
 function cloudBoxHTML(){
 const configured=!!(CL.url&&CL.key);

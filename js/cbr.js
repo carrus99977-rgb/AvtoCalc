@@ -70,27 +70,34 @@ if(!_mkInflight)_mkInflight=loadMarketData()
 .finally(()=>{_mkInflight=null});
 return _mkInflight}
 
-// Загрузка рыночного курса по цепочке источников; бросает, если все недоступны
+// Загрузка рыночного курса по цепочке источников; бросает, если все недоступны.
+// BestChange (нал→USDT) приходит по НЕЗАЩИЩЁННОМУ HTTP — проверяем его фиатным курсом
+// форекса (HTTPS): расхождение >35% считаем подменой и не доверяем.
 async function loadMarketData(){
 let usdRub=null,eurUsd=null,src="USDT";
-// кросс EUR/USD не зависит от USD-цепочки — стартуем параллельно, потребляем в конце
+// форекс (HTTPS, опора-проверка) и BestChange — параллельно
 const erP=(async()=>{try{
 const r=await fetch("https://open.er-api.com/v6/latest/USD",{signal:AbortSignal.timeout(10000)});
 if(r.ok)return await r.json()}catch(_){}return null})();
-try{
+const bcP=(async()=>{try{
 const r=await fetch(MARKET_API,{signal:AbortSignal.timeout(12000)});
-if(r.ok){const d=await r.json();const v=d&&parseFloat(d.usd);
-// принимаем только свежий ответ (защита от любого промежуточного кэша)
-if(v>0&&(!d.ts||Date.now()-d.ts<36e5)){usdRub=v;src="BestChange нал→USDT"}}
-}catch(_){}
+if(r.ok)return await r.json()}catch(_){}return null})();
+const er=await erP;
+const forexUsd=(er&&er.rates&&parseFloat(er.rates.RUB))||0; // ₽ за 1 USD (фиат)
+if(er){const eur=er.rates&&parseFloat(er.rates.EUR);if(eur>0)eurUsd=1/eur}
+// 1) BestChange — только свежий и подтверждённый HTTPS-опорой (форекс) в пределах ±35%.
+// без опоры НЕ доверяем (тот же MITM, что подменяет HTTP-ответ, мог уронить и форекс) → уходим на HTTPS-биржу
+const d=await bcP;
+if(d){const v=parseFloat(d.usd);
+if(v>0&&(!d.ts||Date.now()-d.ts<36e5)&&forexUsd>0&&Math.abs(v-forexUsd)/forexUsd<=0.35){usdRub=v;src="BestChange нал→USDT"}}
+// 2) CoinGecko USDT/₽ (HTTPS-биржа)
 if(!usdRub)try{
 const r=await fetch("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=rub",
 {signal:AbortSignal.timeout(10000)});
-if(r.ok){const d=await r.json();const v=d&&d.tether&&parseFloat(d.tether.rub);if(v>0){usdRub=v;src="биржа USDT"}}
+if(r.ok){const d2=await r.json();const v=d2&&d2.tether&&parseFloat(d2.tether.rub);if(v>0){usdRub=v;src="биржа USDT"}}
 }catch(_){}
-const er=await erP;
-if(er){const eur=er.rates&&parseFloat(er.rates.EUR);if(eur>0)eurUsd=1/eur;
-if(!usdRub){const rub=er.rates&&parseFloat(er.rates.RUB);if(rub>0){usdRub=rub;src="форекс"}}}
+// 3) форекс — последний фолбэк
+if(!usdRub&&forexUsd>0){usdRub=forexUsd;src="форекс"}
 if(!usdRub)throw new Error("нет данных");
 return{usd:usdRub,eurUsd,src}}
 

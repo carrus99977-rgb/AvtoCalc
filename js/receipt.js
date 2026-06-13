@@ -24,6 +24,10 @@ h+=`<div class="r-dash"></div><div class="r-footer">СПАСИБО ЗА РАСЧ
 ${S.receiptImage?`<div class="saved-preview" id="saved-img"><p>✅ ЗАЖМИТЕ КАРТИНКУ ДЛЯ СОХРАНЕНИЯ</p><img src="${S.receiptImage}" alt="Чек"></div>`:""}</div>`;
 return h}
 
+// обрезка текста по ширине с многоточием (шрифт уже выставлен в cx) — чтобы длинные
+// названия/подписи не вылезали за край чека и не наезжали на сумму
+function fitText(cx,s,maxW){s=String(s==null?"":s);if(cx.measureText(s).width<=maxW)return s;
+const e="…";while(s.length>0&&cx.measureText(s+e).width>maxW)s=s.slice(0,-1);return s+e}
 function drawReceiptPNG(opts){
 const W=400,sc=2,cv=document.createElement("canvas"),cx=cv.getContext("2d");
 const cost=totR(opts.entries,opts.rates);
@@ -38,13 +42,13 @@ for(let x=6;x<W;x+=12){cx.beginPath();cx.arc(x,0,3,0,Math.PI*2);cx.fillStyle="#f
 const px=28,rx=W-px,mx=W/2;let y=28;cx.textBaseline="top";
 cx.fillStyle="#2c2c2c";cx.font="bold 17px 'Courier New',monospace";cx.textAlign="center";cx.fillText("★ АВТО КАЛЬКУЛЯТОР ★",mx,y);y+=22;
 cx.font="11px 'Courier New',monospace";cx.fillStyle="#888";cx.fillText(hasSell?"ОТЧЁТ ПО СДЕЛКЕ":"РАСЧЁТ СЕБЕСТОИМОСТИ",mx,y);y+=18;
-if(opts.name){cx.fillStyle="#2c2c2c";cx.font="bold 14px 'Courier New',monospace";cx.fillText(opts.name.toUpperCase(),mx,y);y+=22}
+if(opts.name){cx.fillStyle="#2c2c2c";cx.font="bold 14px 'Courier New',monospace";cx.fillText(fitText(cx,opts.name.toUpperCase(),W-2*px),mx,y);y+=22}
 cx.font="10px 'Courier New',monospace";cx.fillStyle="#aaa";cx.fillText(ds(),mx,y);y+=18;
 cx.setLineDash([4,3]);cx.strokeStyle="#ccc";cx.lineWidth=1;cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=14;
 cx.setLineDash([]);
 opts.entries.forEach(e=>{const cm=curInfo(e.currency);
 const r=entryRate(e,opts.rates),rv=entryRub(e,opts.rates);
-cx.fillStyle="#2c2c2c";cx.font="bold 11px 'Courier New',monospace";cx.textAlign="left";cx.fillText(e.label,px,y);y+=16;
+cx.fillStyle="#2c2c2c";cx.font="bold 11px 'Courier New',monospace";cx.textAlign="left";cx.fillText(fitText(cx,e.label,rx-px),px,y);y+=16;
 cx.font="12px 'Courier New',monospace";cx.fillStyle="#888";cx.textAlign="left";
 cx.fillText(fmt(e.amount)+" "+cm.symbol+(e.currency!=="RUB"?" × "+fmtRate(r):""),px+4,y);
 cx.fillStyle="#2c2c2c";cx.font="bold 12px 'Courier New',monospace";cx.textAlign="right";cx.fillText(fmt(rv)+" ₽",rx,y);y+=20});
