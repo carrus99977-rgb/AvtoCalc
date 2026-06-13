@@ -60,13 +60,36 @@ applyTheme();
 function fmt(n){return n.toLocaleString("ru-RU",{maximumFractionDigits:0})}
 function fmtD(n,d){return n.toLocaleString("ru-RU",{minimumFractionDigits:d,maximumFractionDigits:d})}
 function fmtRate(n){return fmtD(n,n>=1?2:4)}
+// Разбор числа из ввода/импорта «по-русски»: запятая-десятичная (83,45),
+// пробелы-разделители тысяч (1 234 567, в т.ч. тонкие/неразрывные), оба
+// разделителя сразу (1 234,56 / 1,234.56). Мусор/Infinity/буквы → NaN, а не
+// «съедаются» как у parseFloat. Лимит ±1e12 (нет таких сумм). Для чистых
+// "83.45" результат тот же, что у parseFloat, — замена безопасна.
+function parseNum(v){
+if(typeof v==="number")return isFinite(v)&&Math.abs(v)<=1e12?v:NaN;
+let s=String(v==null?"":v).trim();if(!s)return NaN;
+s=s.replace(/[\s   ]/g,""); // убрать пробелы-разделители тысяч
+const hasC=s.indexOf(",")>-1,hasD=s.indexOf(".")>-1;
+if(hasC&&hasD){ // и точка, и запятая → десятичный тот разделитель, что правее
+s=s.lastIndexOf(",")>s.lastIndexOf(".")?s.replace(/\./g,"").replace(",","."):s.replace(/,/g,"");
+}else if(hasC){ // только запятые: одна → десятичная, несколько → тысячи
+s=s.split(",").length===2?s.replace(",","."):s.replace(/,/g,"");
+}else if(hasD&&s.split(".").length>2){ // несколько точек → разделители тысяч
+s=s.replace(/\./g,"");
+}
+s=s.replace(/[^0-9.\-]/g,""); // оставить только цифры/точку/минус
+if(!s||s==="-"||s===".")return NaN;
+const n=parseFloat(s);
+return isFinite(n)&&Math.abs(n)<=1e12?n:NaN}
+// Каноничная строка для хранения: "83,45" → "83.45", мусор → "" (всегда точка)
+function numStr(v){const n=parseNum(v);return isFinite(n)?String(n):""}
 // Курс позиции: свой (зафиксированный), иначе из карты курсов машины/черновика
 function entryRate(e,rates){if(e.currency==="RUB")return 1;
-if(e.rate&&parseFloat(e.rate))return parseFloat(e.rate);
-return parseFloat((rates&&rates[e.currency])||0)}
+const own=parseNum(e.rate);if(own>0)return own;
+const r=parseNum((rates&&rates[e.currency]));return r>0?r:0}
 function entryRub(e,rates){return e.amount*entryRate(e,rates)}
 function totR(entries,rates){return entries.reduce((s,e)=>s+entryRub(e,rates),0)}
-function toR(a,c,rates){if(c==="RUB")return a;return a*parseFloat((rates&&rates[c])||0)}
+function toR(a,c,rates){if(c==="RUB")return a;const r=parseNum(rates&&rates[c]);return a*(r>0?r:0)}
 function ds(){return new Date().toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}
 function dShort(d){try{return new Date(d).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit",year:"numeric"})}catch(e){return d}}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
@@ -84,33 +107,34 @@ return{symbol:safe,cls:"",label:safe,cbr:null}}
 // отбрасываются, типы приводятся, битые объекты возвращают null.
 function normalizeEntry(e){
 if(!e||typeof e!=="object")return null;
-const amt=parseFloat(e.amount);if(!(amt>0))return null; // как в UI: сумма строго > 0 (отсекает 0, отрицательные, NaN)
+const amt=parseNum(e.amount);if(!(amt>0))return null; // как в UI: сумма строго > 0 (отсекает 0, отрицательные, NaN); запятые-импорт принимаем
 // валюта — только латиница 2-6 символов (реальные коды); мусор → RUB
 const cur=(typeof e.currency==="string"&&/^[A-Za-z]{2,6}$/.test(e.currency))?e.currency:"RUB";
 return{category:String(e.category||"other"),label:String(e.label||"Позиция"),
 icon:String(e.icon||"📦"),amount:amt,currency:cur,
-rate:cur==="RUB"?"":String(e.rate||"")}}
+rate:cur==="RUB"?"":numStr(e.rate)}} // курс канонизируем (запятая→точка), мусор→""
+// Карта курсов: значения канонизируем (запятая→точка, мусор→""), чтобы импорт/облако не таскали «грязные» строки
 function safeRates(o){if(!o||typeof o!=="object"||Array.isArray(o))return null;
-const r={};Object.keys(o).forEach(k=>{r[String(k)]=String(o[k]==null?"":o[k])});return r}
+const r={};Object.keys(o).forEach(k=>{r[String(k)]=numStr(o[k])});return r}
 function normalizeCar(c){
 if(!c||typeof c!=="object")return null;
 const entries=(Array.isArray(c.entries)?c.entries:[]).map(normalizeEntry).filter(Boolean);
 if(!entries.length)return null;
 const status=c.status==="sold"?"sold":"stock";
-const rates=safeRates(c.rates)||{EUR:String(c.eurRate||""),USD:String(c.usdRate||"")};
+const rates=safeRates(c.rates)||{EUR:numStr(c.eurRate),USD:numStr(c.usdRate)};
 const sellRates=safeRates(c.sellRates);
 return{id:safeId(c.id)||uid(),
 name:typeof c.name==="string"?c.name:String(c.name||"Без названия"),
 date:typeof c.date==="string"?c.date:new Date().toISOString(),
 rates,eurRate:String(rates.EUR||""),usdRate:String(rates.USD||""),
 entries,status,
-sellPrice:status==="sold"?String(c.sellPrice||""):"",
+sellPrice:status==="sold"?numStr(c.sellPrice):"",
 sellCurrency:typeof c.sellCurrency==="string"?c.sellCurrency:"RUB",
 sellDate:c.sellDate||null,
 sellRates,
 sellEurRate:String((sellRates&&sellRates.EUR)||""),
 sellUsdRate:String((sellRates&&sellRates.USD)||""),
-askPrice:(()=>{const ap=parseFloat(c.askPrice);return isFinite(ap)&&ap>0?String(ap):""})(),
+askPrice:(()=>{const ap=parseNum(c.askPrice);return ap>0?String(ap):""})(),
 note:typeof c.note==="string"?c.note.slice(0,500):"",
 // метка свежести → канон. UTC Z-форма, чтобы строковое сравнение в слиянии было хронологически верным
 updatedAt:(()=>{const s=c.updatedAt;if(typeof s!=="string"||!s)return"";const d=new Date(s);return isNaN(d)?"":d.toISOString()})()}}
@@ -121,8 +145,8 @@ if(car.sellRates)Object.assign(r,car.sellRates);
 else{if(car.sellEurRate)r.EUR=car.sellEurRate;if(car.sellUsdRate)r.USD=car.sellUsdRate}
 return r}
 function carCost(car){return totR(car.entries,carRates(car))}
-function carSellRub(car){return toR(parseFloat(car.sellPrice)||0,car.sellCurrency,carSellRates(car))}
-function carSellRate(car){return parseFloat(carSellRates(car)[car.sellCurrency]||0)}
+function carSellRub(car){return toR(parseNum(car.sellPrice)||0,car.sellCurrency,carSellRates(car))}
+function carSellRate(car){return parseNum(carSellRates(car)[car.sellCurrency])||0}
 function carProfit(car){return carSellRub(car)-carCost(car)}
 function daysBetween(d1,d2){try{return Math.max(0,Math.round((new Date(d2)-new Date(d1))/86400000))}catch(e){return 0}}
 

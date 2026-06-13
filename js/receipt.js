@@ -28,8 +28,8 @@ function drawReceiptPNG(opts){
 const W=400,sc=2,cv=document.createElement("canvas"),cx=cv.getContext("2d");
 const cost=totR(opts.entries,opts.rates);
 let sellRub=0,profit=0,markup=0,margin=0,hasSell=false;
-if(opts.sell&&parseFloat(opts.sell.price)){hasSell=true;
-sellRub=toR(parseFloat(opts.sell.price),opts.sell.currency,opts.sell.rates);
+if(opts.sell&&parseNum(opts.sell.price)>0){hasSell=true;
+sellRub=toR(parseNum(opts.sell.price),opts.sell.currency,opts.sell.rates);
 profit=sellRub-cost;markup=cost>0?(profit/cost)*100:0;margin=sellRub>0?(profit/sellRub)*100:0}
 let tH=60;if(opts.name)tH+=28;tH+=24+20+16+opts.entries.length*38+20+28;
 if(hasSell)tH+=140;tH+=50+30;
@@ -54,8 +54,8 @@ cx.font="bold 17px 'Courier New',monospace";cx.fillStyle="#2c2c2c";cx.textAlign=
 cx.textAlign="right";cx.fillText(fmt(cost)+" ₽",rx,y);y+=22;
 if(hasSell){y+=4;cx.setLineDash([4,3]);cx.strokeStyle="#ccc";cx.lineWidth=1;cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=12;cx.setLineDash([]);
 const ip=profit>=0;const sCur=curInfo(opts.sell.currency);
-const rows=[["ЦЕНА ПРОДАЖИ:",fmt(parseFloat(opts.sell.price))+" "+sCur.symbol+(opts.sell.currency!=="RUB"?" = "+fmt(sellRub)+" ₽":""),null]];
-if(opts.sell.currency!=="RUB")rows.push(["КУРС ПРОДАЖИ:",fmtRate(parseFloat(opts.sell.rates[opts.sell.currency]||0))+" ₽/"+sCur.symbol,null]);
+const rows=[["ЦЕНА ПРОДАЖИ:",fmt(parseNum(opts.sell.price)||0)+" "+sCur.symbol+(opts.sell.currency!=="RUB"?" = "+fmt(sellRub)+" ₽":""),null]];
+if(opts.sell.currency!=="RUB")rows.push(["КУРС ПРОДАЖИ:",fmtRate(parseNum(opts.sell.rates[opts.sell.currency])||0)+" ₽/"+sCur.symbol,null]);
 rows.push(["ПРИБЫЛЬ:",(ip?"+":"")+fmt(profit)+" ₽",ip],["НАЦЕНКА:",(ip?"+":"")+fmtD(markup,1)+"%",ip],["МАРЖА:",(ip?"+":"")+fmtD(margin,1)+"%",ip]);
 rows.forEach(([lab,v,c])=>{cx.font="bold 11px 'Courier New',monospace";cx.fillStyle="#2c2c2c";cx.textAlign="left";cx.fillText(lab,px,y);
 cx.fillStyle=c===null?"#2c2c2c":c?"#1e8449":"#922b21";cx.textAlign="right";cx.fillText(v,rx,y);y+=20})}
@@ -71,12 +71,12 @@ a.download="Чек_"+sn+"_"+new Date().toLocaleDateString("ru-RU").replace(/\./g
 a.href=dataUrl;document.body.appendChild(a);a.click();document.body.removeChild(a)}catch(_){}}
 
 function buildCalcReceiptPNG(){
-const sp=parseFloat(S.sellPrice)||0;
+const sp=parseNum(S.sellPrice)||0;
 return drawReceiptPNG({name:S.carName.trim(),rates:S.rates,entries:S.entries,
 sell:sp>0?{price:S.sellPrice,currency:S.sellCurrency,rates:S.rates}:null})}
 function buildCarReceiptPNG(car){
 return drawReceiptPNG({name:car.name,rates:carRates(car),entries:car.entries,
-sell:car.status==="sold"&&parseFloat(car.sellPrice)?{price:car.sellPrice,currency:car.sellCurrency,
+sell:car.status==="sold"&&parseNum(car.sellPrice)>0?{price:car.sellPrice,currency:car.sellCurrency,
 rates:carSellRates(car)}:null})}
 
 // ===== ШАРИНГ ЧЕКА =====

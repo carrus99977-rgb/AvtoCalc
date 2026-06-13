@@ -3,12 +3,12 @@ function digit(d){vibrate(8);if(S.display==="0"&&d!==".")S.display=d;else if(d==
 function clr(){vibrate(8);S.display="0";rDisp()}
 function bsp(){vibrate(8);S.display=S.display.length<=1?"0":S.display.slice(0,-1);rDisp()}
 function tri(n){vibrate(8);if(S.display!=="0"){S.display+=n;rDisp()}}
-function curClick(cid){vibrate(14);const a=parseFloat(S.display)||0;if(a<=0)return;
+function curClick(cid){vibrate(14);const a=parseNum(S.display)||0;if(a<=0)return;
 // без курса позицию не добавляем — иначе она молча станет 0 ₽ (актуально после «✕ очистить»)
-if(cid!=="RUB"&&!(parseFloat(S.rates[cid])>0)){alert("Введите курс "+cid+"/₽ — он зафиксируется за позицией");return}
+if(cid!=="RUB"&&!(parseNum(S.rates[cid])>0)){alert("Введите курс "+cid+"/₽ — он зафиксируется за позицией");return}
 const cat=CATS[S.curCat];
-// фиксируем курс на момент добавления позиции
-const rate=cid==="RUB"?"":(S.rates[cid]||"");
+// фиксируем курс на момент добавления позиции (каноничный, с точкой)
+const rate=cid==="RUB"?"":numStr(S.rates[cid]);
 S.entries.push({category:cat.id,label:cat.label,icon:cat.icon,amount:a,currency:cid,rate:rate});
 S.display="0";if(S.curCat<CATS.length-1)S.curCat++;
 S.showReceipt=false;S.receiptImage=null;saveDraft();render()}
@@ -19,21 +19,21 @@ S.entries.splice(Math.min(i,S.entries.length),0,removed);S.editingEntry=null;sav
 function startEdit(i){const e=S.entries[i];S.editingEntry=i;S.editValue=String(e.amount);S.editCurr=e.currency;
 S.editRate=e.rate||(e.currency==="RUB"?"":S.rates[e.currency]||"");render()}
 function cancelEdit(){S.editingEntry=null;render()}
-function saveEdit(i){const v=parseFloat(S.editValue)||0;if(v<=0){alert("Введите сумму");return}
+function saveEdit(i){const v=parseNum(S.editValue)||0;if(v<=0){alert("Введите сумму");return}
 S.entries[i].amount=v;S.entries[i].currency=S.editCurr;
-S.entries[i].rate=S.editCurr==="RUB"?"":(S.editRate||S.rates[S.editCurr]||"");
+S.entries[i].rate=S.editCurr==="RUB"?"":numStr(S.editRate||S.rates[S.editCurr]||"");
 S.editingEntry=null;S.showReceipt=false;S.receiptImage=null;saveDraft();render()}
 function printR(){S.showReceipt=true;S.receiptImage=null;render();
 setTimeout(()=>document.getElementById("receipt-section")?.scrollIntoView({behavior:"smooth"}),100)}
 function rDisp(){const el=document.getElementById("calc-display");if(!el)return render();
-const l=S.display.length;el.style.fontSize=(l>12?24:l>8?30:36)+"px";el.textContent=fmt(parseFloat(S.display||"0"))}
+const l=S.display.length;el.style.fontSize=(l>12?24:l>8?30:36)+"px";el.textContent=fmt(parseNum(S.display||"0")||0)}
 function rProfit(){const t=totR(S.entries,S.rates);
 const el=document.getElementById("pr-results");if(el)el.innerHTML=prHTML(pCalc(t))}
-function pCalc(cost){const sell=toR(parseFloat(S.sellPrice)||0,S.sellCurrency,S.rates);const pr=sell-cost;
+function pCalc(cost){const sell=toR(parseNum(S.sellPrice)||0,S.sellCurrency,S.rates);const pr=sell-cost;
 return{cost,sell,profit:pr,markup:cost>0?(pr/cost)*100:0,margin:sell>0?(pr/sell)*100:0}}
 
 // ===== ОБРАТНЫЙ КАЛЬКУЛЯТОР: цена продажи под целевую наценку =====
-function tgtPct(){const p=parseFloat(S.targetMarkup);return isFinite(p)&&p>-100?p:null}
+function tgtPct(){const p=parseNum(S.targetMarkup);return isFinite(p)&&p>-100?p:null}
 function targetPrice(cost){const p=tgtPct();
 return(p==null||!(cost>0))?null:cost*(1+p/100)}
 function targetHTML(cost){
@@ -41,7 +41,7 @@ if(tgtPct()==null)return `<span style="color:var(--t5)">введи %</span>`;
 if(!(cost>0))return `<span style="color:var(--t5)">нет себестоимости</span>`;
 const v=targetPrice(cost);
 let s=fmt(v)+" ₽";
-if(S.sellCurrency!=="RUB"){const r=parseFloat(S.rates[S.sellCurrency]);
+if(S.sellCurrency!=="RUB"){const r=parseNum(S.rates[S.sellCurrency]);
 if(r>0)s+=` ≈ ${fmt(v/r)} ${curInfo(S.sellCurrency).symbol}`}
 return s}
 function rTarget(){const el=document.getElementById("tgt-out");
@@ -52,7 +52,7 @@ const cost=totR(S.entries,S.rates);
 if(!(cost>0)){alert("Себестоимость 0 ₽ — проверьте курсы позиций");return}
 const v=targetPrice(cost);
 let price=v;
-if(S.sellCurrency!=="RUB"){const r=parseFloat(S.rates[S.sellCurrency]);
+if(S.sellCurrency!=="RUB"){const r=parseNum(S.rates[S.sellCurrency]);
 if(!(r>0)){alert("Нет курса "+S.sellCurrency+" — введите курс или выберите ₽");return}
 price=v/r}
 S.sellPrice=String(Math.round(price));saveDraft();render()}
@@ -96,7 +96,7 @@ oninput="S.carName=this.value;saveDraft()">
 ${S.showSettings?`<div class="coll-body">
 <div class="rates-row" style="flex-wrap:wrap">
 ${S.activeCur.map(c=>`<div style="flex:1 1 40%;min-width:120px"><label class="rate-label ${curInfo(c).cls}">${curInfo(c).symbol} ${c} / ₽</label>
-<input type="number" class="rate-input ${curInfo(c).cls}" value="${esc(S.rates[c]||"")}" oninput="S.rates['${c}']=this.value;saveDraft()" onchange="render()"></div>`).join("")}
+<input type="text" inputmode="decimal" maxlength="16" class="rate-input ${curInfo(c).cls}" value="${esc(S.rates[c]||"")}" oninput="S.rates['${c}']=this.value;saveDraft()" onchange="render()"></div>`).join("")}
 </div>
 <div class="cur-chips">
 ${Object.keys(CUR).filter(c=>c!=="RUB").map(c=>`<div class="cur-chip ${S.activeCur.includes(c)?"active":""}" onclick="togCur('${c}')">${CUR[c].symbol} ${c} · ${CUR[c].label}</div>`).join("")}</div>
@@ -110,7 +110,7 @@ ${Object.keys(CUR).filter(c=>c!=="RUB").map(c=>`<div class="cur-chip ${S.activeC
 <div class="categories">${CATS.map((c,i)=>`<div class="cat-btn ${S.curCat===i?"active":""}" onclick="S.curCat=${i};saveDraft();render()">${c.icon} ${c.label}</div>`).join("")}</div>
 <div class="calc-body"><div class="display-box">
 <div class="display-cat">${CATS[S.curCat].icon} ${CATS[S.curCat].label}</div>
-<div class="display-num" id="calc-display" style="font-size:${fs}px">${fmt(parseFloat(S.display||"0"))}</div></div>
+<div class="display-num" id="calc-display" style="font-size:${fs}px">${fmt(parseNum(S.display||"0")||0)}</div></div>
 <div class="numpad">
 ${[7,8,9].map(d=>`<div class="btn-calc" onclick="digit('${d}')">${d}</div>`).join("")}
 <div class="btn-calc back" onclick="bsp()">⌫</div>
@@ -130,12 +130,12 @@ if(S.editingEntry===i){
 h+=`<div class="entry-edit-form">
 <div style="color:#888;font-size:10px;margin-bottom:6px">${esc(e.icon)} ${esc(e.label)} — редактирование</div>
 <label class="edit-lbl">СУММА</label>
-<input type="number" class="entry-edit-input" value="${esc(S.editValue)}" oninput="S.editValue=this.value">
+<input type="text" inputmode="decimal" maxlength="16" class="entry-edit-input" value="${esc(S.editValue)}" oninput="S.editValue=this.value">
 <div class="profit-curr-row" style="margin-bottom:8px">
 ${[...new Set(["RUB",...S.activeCur,S.editCurr])].map(c=>`<div class="pcb ${S.editCurr===c?"a-"+curInfo(c).cls:""}"
 onclick="S.editCurr='${esc(c)}';S.editRate=S.rates['${esc(c)}']||'';render()">${curInfo(c).symbol} ${esc(c)}</div>`).join("")}</div>
 ${S.editCurr!=="RUB"?`<label class="edit-lbl">КУРС ${curInfo(S.editCurr).symbol}/₽ (на дату оплаты)</label>
-<input type="number" class="entry-edit-input" value="${esc(S.editRate)}" oninput="S.editRate=this.value">`:""}
+<input type="text" inputmode="decimal" maxlength="16" class="entry-edit-input" value="${esc(S.editRate)}" oninput="S.editRate=this.value">`:""}
 <div style="display:flex;gap:8px">
 <div class="btn-action btn-green" style="flex:1;margin:0;padding:10px 0;font-size:11px" onclick="saveEdit(${i})">✅ СОХРАНИТЬ</div>
 <div class="btn-action btn-outline" style="flex:0 0 auto;margin:0;padding:10px 16px;font-size:11px" onclick="cancelEdit()">✕</div></div></div>`;
@@ -156,12 +156,12 @@ h+=`<div class="profit-box"><div class="coll-header" onclick="S.showProfit=!S.sh
 <span>📊 Расчёт прибыли</span><span class="coll-arrow" style="transform:rotate(${S.showProfit?180:0}deg)">▾</span></div>
 ${S.showProfit?`<div class="profit-body">
 <div class="profit-input-group"><label>💰 Продажа</label>
-<input type="number" class="profit-input" placeholder="0" value="${esc(S.sellPrice)}" oninput="S.sellPrice=this.value;saveDraft();rProfit()"></div>
+<input type="text" inputmode="decimal" maxlength="16" class="profit-input" placeholder="0" value="${esc(S.sellPrice)}" oninput="S.sellPrice=this.value;saveDraft();rProfit()"></div>
 <div class="profit-curr-row">
 ${[...new Set(["RUB",...S.activeCur,S.sellCurrency])].map(c=>`<div class="pcb ${S.sellCurrency===c?"a-"+curInfo(c).cls:""}" onclick="S.sellCurrency='${esc(c)}';saveDraft();render()">${curInfo(c).symbol} ${esc(c)}</div>`).join("")}</div>
 <div class="target-row">
 <label class="target-lbl">🎯 Наценка</label>
-<input type="number" class="profit-input target-inp" placeholder="%" value="${esc(S.targetMarkup)}" oninput="S.targetMarkup=this.value;saveDraft();rTarget()">
+<input type="text" inputmode="decimal" maxlength="8" class="profit-input target-inp" placeholder="%" value="${esc(S.targetMarkup)}" oninput="S.targetMarkup=this.value;saveDraft();rTarget()">
 <div class="target-out" id="tgt-out">${targetHTML(t)}</div>
 <div class="bulk-apply" onclick="applyTarget()">→ В ПРОДАЖУ</div></div>
 <div class="pr-box" id="pr-results">${prHTML(pCalc(t))}</div></div>`:""}</div>`}

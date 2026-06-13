@@ -2,8 +2,9 @@
 function addToWH(){if(!S.carName.trim()){alert("Введите название авто");return}
 if(S.entries.length===0){alert("Добавьте хотя бы одну позицию");return}
 for(const e of S.entries){if(e.currency!=="RUB"&&!(entryRate(e,S.rates)>0)){alert("Проверьте курсы — есть позиции без курса");return}}
+const cleanRates={};Object.keys(S.rates).forEach(k=>{cleanRates[k]=numStr(S.rates[k])}); // храним каноничные курсы (точка)
 S.warehouse.unshift({id:uid(),name:S.carName.trim(),date:new Date().toISOString(),
-rates:{...S.rates},eurRate:S.rates.EUR||"",usdRate:S.rates.USD||"",
+rates:cleanRates,eurRate:cleanRates.EUR||"",usdRate:cleanRates.USD||"",
 entries:JSON.parse(JSON.stringify(S.entries)),note:"",updatedAt:new Date().toISOString(),
 status:"stock",sellPrice:"",sellCurrency:"RUB",sellDate:null,sellRates:null,sellEurRate:"",sellUsdRate:""});
 saveWH();cloudUpsert(S.warehouse[0]);
@@ -16,15 +17,15 @@ S.sellFormRate="";render()}
 function cancelSell(){S.sellingCarId=null;S.sellEditMode=false;render()}
 // общая валидация и запись формы продажи (используют и продажа, и правка цены)
 function validateSaleForm(){
-if(!parseFloat(S.sellFormPrice)){alert("Введите цену продажи");return false}
+if(!(parseNum(S.sellFormPrice)>0)){alert("Введите цену продажи");return false}
 const sRate=S.sellFormRate||S.rates[S.sellFormCurr]||"";
-if(S.sellFormCurr!=="RUB"&&!(parseFloat(sRate)>0)){alert("Введите курс продажи");return false}
+if(S.sellFormCurr!=="RUB"&&!(parseNum(sRate)>0)){alert("Введите курс продажи");return false}
 return true}
 function applySaleForm(car){
-car.sellPrice=S.sellFormPrice;car.sellCurrency=S.sellFormCurr;
+car.sellPrice=numStr(S.sellFormPrice);car.sellCurrency=S.sellFormCurr; // храним каноничную строку (точка)
 const sRate=S.sellFormRate||S.rates[S.sellFormCurr]||"";
 car.sellRates={};
-if(S.sellFormCurr!=="RUB")car.sellRates[S.sellFormCurr]=sRate;
+if(S.sellFormCurr!=="RUB")car.sellRates[S.sellFormCurr]=numStr(sRate);
 // зеркала для совместимости со старыми версиями
 car.sellEurRate=car.sellRates.EUR||"";car.sellUsdRate=car.sellRates.USD||""}
 function doSell(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
@@ -80,20 +81,20 @@ render()}
 function cancelCarEdit(){S.editingCarId=null;S.editCarEntries=null;render()}
 function saveCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car||!S.editCarEntries)return;
 if(!String(S.editName||"").trim()){alert("Введите название авто");return}
-for(const e of S.editCarEntries){if(!(parseFloat(e.amount)>0)){alert("Проверьте суммы — есть пустые или нулевые");return}
-if(e.currency!=="RUB"&&!(parseFloat(e.rate)>0)){alert("Проверьте курсы — есть пустые");return}}
+for(const e of S.editCarEntries){if(!(parseNum(e.amount)>0)){alert("Проверьте суммы — есть пустые или нулевые");return}
+if(e.currency!=="RUB"&&!(parseNum(e.rate)>0)){alert("Проверьте курсы — есть пустые");return}}
 car.entries=S.editCarEntries.map(e=>{const{_new,...rest}=e;
-return{...rest,amount:parseFloat(e.amount),rate:e.currency==="RUB"?"":String(e.rate)}});
+return{...rest,amount:parseNum(e.amount),rate:e.currency==="RUB"?"":numStr(e.rate)}});
 car.name=S.editName.trim();
 car.note=String(S.editNote||"").trim().slice(0,500);
-const ap=parseFloat(S.editAskPrice);car.askPrice=isFinite(ap)&&ap>0?String(ap):"";
+const ap=parseNum(S.editAskPrice);car.askPrice=ap>0?String(ap):"";
 // пустую/битую дату не трогаем; иначе фиксируем полдень выбранного дня (без сдвига пояса)
 if(/^\d{4}-\d{2}-\d{2}$/.test(S.editDate||"")){const d=new Date(S.editDate+"T12:00:00");if(!isNaN(d))car.date=d.toISOString()}
 S.editingCarId=null;S.editCarEntries=null;touch(car);saveWH();cloudUpsert(car);render()}
 function updEditEntry(i,field,val){if(!S.editCarEntries)return;S.editCarEntries[i][field]=val;updEditCost()}
 function updEditCost(){if(!S.editCarEntries)return;
 const car=S.warehouse.find(c=>c.id===S.editingCarId);if(!car)return;
-const entries=S.editCarEntries.map(e=>({...e,amount:parseFloat(e.amount)||0}));
+const entries=S.editCarEntries.map(e=>({...e,amount:parseNum(e.amount)||0}));
 // null вместо карты курсов машины: строка без введённого курса честно даёт 0 ₽ в превью
 const cost=totR(entries,null);
 const el=document.getElementById("edit-cost-val");if(el)el.textContent=fmt(cost)+" ₽";
@@ -103,8 +104,8 @@ const del=document.getElementById("edit-cost-diff");
 if(del){del.textContent=(diff===0?"без изменений":(diff>0?"+":"")+fmt(diff)+" ₽ к исходной");
 del.style.color=diff>0?"#e74c3c":diff<0?"#27ae60":"#556"}}
 function bulkApply(curr){if(!S.editCarEntries)return;
-const v=S.bulkRates[curr];if(!(parseFloat(v)>0)){alert("Введите курс");return}
-S.editCarEntries.forEach(e=>{if(e.currency===curr)e.rate=v});render()}
+const v=S.bulkRates[curr];if(!(parseNum(v)>0)){alert("Введите курс");return}
+const cv=numStr(v);S.editCarEntries.forEach(e=>{if(e.currency===curr)e.rate=cv});render()}
 
 // ===== ДОБАВЛЕНИЕ РАСХОДА К МАШИНЕ (в режиме правки) =====
 function addEditEntry(){if(!S.editCarEntries)return;
@@ -215,7 +216,7 @@ h+=`<div class="wh-detail" onclick="event.stopPropagation()">
 <input type="date" class="edit-input edit-date" value="${esc(S.editDate)}" oninput="S.editDate=this.value"></div></div>
 <div class="edit-fields" style="margin-bottom:10px">
 <div class="edit-field"><label class="edit-lbl">ЦЕНА ДЛЯ КЛИЕНТА ₽ (для списка машин, не себестоимость)</label>
-<input type="number" class="edit-input" placeholder="не указана" value="${esc(S.editAskPrice)}" oninput="S.editAskPrice=this.value"></div></div>
+<input type="text" inputmode="decimal" maxlength="16" class="edit-input" placeholder="не указана" value="${esc(S.editAskPrice)}" oninput="S.editAskPrice=this.value"></div></div>
 <div class="edit-fields" style="margin-bottom:10px">
 <div class="edit-field"><label class="edit-lbl">ЗАМЕТКА (VIN, комплектация, контакты)</label>
 <textarea class="edit-input edit-area" rows="2" maxlength="500" placeholder="пусто" oninput="S.editNote=this.value">${esc(S.editNote)}</textarea></div></div>
@@ -224,7 +225,7 @@ if(bulkCurs.length){
 h+=`<div style="color:#667;font-size:9px;margin-bottom:6px;letter-spacing:.5px">БЫСТРО ПРИМЕНИТЬ КУРС КО ВСЕМ ПОЗИЦИЯМ:</div>`;
 bulkCurs.forEach(c=>{h+=`<div class="bulk-rate-row"><div class="bulk-rate-field">
 <label class="edit-lbl">${curInfo(c).symbol} ${esc(c)} / ₽</label>
-<input type="number" class="edit-input" value="${esc(S.bulkRates[c])}" oninput="S.bulkRates['${esc(c)}']=this.value"></div>
+<input type="text" inputmode="decimal" maxlength="16" class="edit-input" value="${esc(S.bulkRates[c])}" oninput="S.bulkRates['${esc(c)}']=this.value"></div>
 <div class="bulk-apply" onclick="bulkApply('${esc(c)}')">→ ВСЕМ ${curInfo(c).symbol}</div></div>`});
 }
 S.editCarEntries.forEach((e,i)=>{const cm=curInfo(e.currency);
@@ -240,20 +241,20 @@ ${["RUB",...S.activeCur].map(c=>`<div class="pcb ${e.currency===c?"a-"+curInfo(c
 onclick="setEditEntryCur(${i},'${esc(c)}')">${curInfo(c).symbol} ${esc(c)}</div>`).join("")}</div>
 <div class="edit-fields">
 <div class="edit-field"><label class="edit-lbl">СУММА ${cm.symbol}</label>
-<input type="number" class="edit-input" placeholder="0" value="${esc(e.amount)}" oninput="updEditEntry(${i},'amount',this.value)"></div>
+<input type="text" inputmode="decimal" maxlength="16" class="edit-input" placeholder="0" value="${esc(e.amount)}" oninput="updEditEntry(${i},'amount',this.value)"></div>
 ${e.currency!=="RUB"?`<div class="edit-field"><label class="edit-lbl">КУРС ₽</label>
-<input type="number" class="edit-input" value="${esc(e.rate)}" oninput="updEditEntry(${i},'rate',this.value)"></div>`:""}
+<input type="text" inputmode="decimal" maxlength="16" class="edit-input" value="${esc(e.rate)}" oninput="updEditEntry(${i},'rate',this.value)"></div>`:""}
 </div></div>`;
 }else{
 h+=`<div class="edit-entry-card"><div class="edit-entry-title">${esc(e.icon)} ${esc(e.label)} (${cm.symbol})</div>
 <div class="edit-fields">
 <div class="edit-field"><label class="edit-lbl">СУММА ${cm.symbol}</label>
-<input type="number" class="edit-input" value="${esc(e.amount)}" oninput="updEditEntry(${i},'amount',this.value)"></div>
+<input type="text" inputmode="decimal" maxlength="16" class="edit-input" value="${esc(e.amount)}" oninput="updEditEntry(${i},'amount',this.value)"></div>
 ${e.currency!=="RUB"?`<div class="edit-field"><label class="edit-lbl">КУРС ₽</label>
-<input type="number" class="edit-input" value="${esc(e.rate)}" oninput="updEditEntry(${i},'rate',this.value)"></div>`:""}
+<input type="text" inputmode="decimal" maxlength="16" class="edit-input" value="${esc(e.rate)}" oninput="updEditEntry(${i},'rate',this.value)"></div>`:""}
 </div></div>`}});
 h+=`<div class="backup-btn" style="margin-bottom:10px" onclick="addEditEntry()">➕ ДОБАВИТЬ РАСХОД</div>`;
-const editCost=totR(S.editCarEntries.map(e=>({...e,amount:parseFloat(e.amount)||0})),null);
+const editCost=totR(S.editCarEntries.map(e=>({...e,amount:parseNum(e.amount)||0})),null);
 const editDiff=editCost-cost;
 h+=`<div class="edit-cost-preview"><span class="ecp-lbl">СЕБЕСТОИМОСТЬ</span>
 <div style="text-align:right"><div class="ecp-val" id="edit-cost-val">${fmt(editCost)} ₽</div>
@@ -273,14 +274,14 @@ h+=`<div class="wh-detail-row"><span class="wh-detail-lbl">${esc(e.icon)} ${esc(
 h+=`<div class="wh-detail-row" style="border-top:2px solid var(--br2);padding-top:8px;margin-top:4px">
 <span style="color:var(--gold);font-size:12px;font-weight:700">СЕБЕСТОИМОСТЬ</span>
 <span style="color:var(--gold);font-size:14px;font-weight:700;font-family:'Oswald',sans-serif">${fmt(cost)} ₽</span></div>`;
-if(car.status==="stock"&&parseFloat(car.askPrice)>0)h+=`<div class="wh-detail-row">
+if(car.status==="stock"&&parseNum(car.askPrice)>0)h+=`<div class="wh-detail-row">
 <span class="wh-detail-lbl">💰 Цена для клиента</span>
-<span class="wh-detail-val">${fmt(parseFloat(car.askPrice))} ₽</span></div>`;
+<span class="wh-detail-val">${fmt(parseNum(car.askPrice))} ₽</span></div>`;
 if(car.note)h+=`<div class="wh-note">📝 ${esc(car.note)}</div>`;
 if(car.status==="sold"){const mg=cost>0?(pr/cost)*100:0,ip=pr>=0;
 const sCur=curInfo(car.sellCurrency);
 h+=`<div class="wh-detail-row"><span class="wh-detail-lbl">💰 Продажа</span>
-<span class="wh-detail-val">${fmt(parseFloat(car.sellPrice)||0)} ${sCur.symbol}${car.sellCurrency!=="RUB"?" → "+fmt(sellR)+" ₽":""}</span></div>
+<span class="wh-detail-val">${fmt(parseNum(car.sellPrice)||0)} ${sCur.symbol}${car.sellCurrency!=="RUB"?" → "+fmt(sellR)+" ₽":""}</span></div>
 ${car.sellCurrency!=="RUB"?`<div class="wh-detail-row"><span class="wh-detail-lbl">📈 Курс продажи</span>
 <span class="wh-detail-val">${fmtRate(carSellRate(car))} ₽/${sCur.symbol}</span></div>`:""}
 <div class="wh-detail-row"><span class="wh-detail-lbl">📊 Прибыль</span>
@@ -301,12 +302,12 @@ h+=`</div>`}
 
 if(selling){h+=`<div class="wh-sell-form" onclick="event.stopPropagation()">
 <div style="color:#888;font-size:11px;font-weight:600;margin-bottom:8px">${S.sellEditMode?"ИЗМЕНИТЬ ПРОДАЖУ":"ОФОРМИТЬ ПРОДАЖУ"}</div>
-<input type="number" class="wh-sell-input" placeholder="Цена продажи" value="${esc(S.sellFormPrice)}" oninput="S.sellFormPrice=this.value">
+<input type="text" inputmode="decimal" maxlength="16" class="wh-sell-input" placeholder="Цена продажи" value="${esc(S.sellFormPrice)}" oninput="S.sellFormPrice=this.value">
 <div class="profit-curr-row">
 ${[...new Set(["RUB",...S.activeCur,S.sellFormCurr])].map(c=>`<div class="pcb ${S.sellFormCurr===c?"a-"+curInfo(c).cls:""}"
 onclick="if(S.sellFormCurr!=='${esc(c)}'){S.sellFormCurr='${esc(c)}';S.sellFormRate=S.rates['${esc(c)}']||''}render()">${curInfo(c).symbol} ${esc(c)}</div>`).join("")}</div>
 ${S.sellFormCurr!=="RUB"?`<label class="sell-rate-lbl">КУРС НА ДАТУ ПРОДАЖИ ${curInfo(S.sellFormCurr).symbol}/₽</label>
-<input type="number" class="wh-sell-input" value="${esc(S.sellFormRate)}" oninput="S.sellFormRate=this.value">`:""}
+<input type="text" inputmode="decimal" maxlength="16" class="wh-sell-input" value="${esc(S.sellFormRate)}" oninput="S.sellFormRate=this.value">`:""}
 <div style="display:flex;gap:8px;margin-top:4px">
 <div class="btn-action btn-green" style="flex:1;margin:0" onclick="${S.sellEditMode?"saveSaleEdit":"doSell"}('${esc(car.id)}')">${S.sellEditMode?"✅ СОХРАНИТЬ":"✅ ПРОДАТЬ"}</div>
 <div class="btn-action btn-outline" style="flex:0 0 auto;margin:0;padding:10px 16px" onclick="cancelSell()">✕</div></div></div>`}

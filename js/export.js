@@ -45,7 +45,7 @@ function stockListText(){
 const stk=sortStock(S.warehouse.filter(c=>c.status==="stock"));
 if(!stk.length)return null;
 let t="🚗 МАШИНЫ В НАЛИЧИИ ("+new Date().toLocaleDateString("ru-RU")+"):\n";
-stk.forEach(c=>{const p=parseFloat(c.askPrice);
+stk.forEach(c=>{const p=parseNum(c.askPrice);
 t+="• "+c.name+(p>0?" — "+fmt(p)+" ₽":" — цена по запросу")+"\n"});
 return t.trim()}
 function shareStockList(){
