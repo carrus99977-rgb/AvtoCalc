@@ -7,11 +7,14 @@ return `https://www.cbr-xml-daily.ru/archive/${y}/${p(m)}/${p(d)}/daily_json.js`
 // Прогретый «сегодняшний» ответ ЦБ: повторные нажатия в течение 10 минут — мгновенны
 let _cbrCache=null; // {data, ts}
 const RATES_TTL=6e5; // 10 минут — как s-maxage у серверной функции
-// дата курса в данных ЦБ как YYYY-MM-DD (в этом же виде applyCbrData пишет её в S.cbrDate)
-function cbrDataDate(d){try{return new Date(d.Date).toISOString().slice(0,10)}catch(_){return""}}
+// сегодня как YYYY-MM-DD (локальная дата — для перекупа ≈ московская)
+function todayStr(){const d=new Date();const p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())}
 
-// Применить данные ЦБ к курсам; false — если в данных нет ни одной нашей валюты
-function applyCbrData(data){
+// Применить данные ЦБ к курсам; false — если в данных нет ни одной нашей валюты.
+// showDate (YYYY-MM-DD) — дата, которую ПОКАЗЫВАЕМ: сегодня для авто либо выбранная.
+// ЦБ не публикует курс по выходным, но пятничный курс ДЕЙСТВУЕТ в сб/вс — поэтому на
+// выходных показываем «на сегодня» с пятничными цифрами (это и есть актуальный курс дня).
+function applyCbrData(data,showDate){
 let n=0;
 Object.keys(CUR).forEach(c=>{const code=CUR[c].cbr;if(!code)return;
 const v=data.Valute&&data.Valute[code];if(!v||!v.Value)return;
@@ -19,18 +22,18 @@ const perUnit=v.Value/(v.Nominal||1); // ЦБ котирует вону за 100
 // 6 знаков: достаточно точности для валют с курсом <1 (вона ~0.0473)
 S.rates[c]=String(Math.round(perUnit*1e6)/1e6);n++});
 if(!n)return false;
-const dt=new Date(data.Date);
-S.cbrInfo=`✓ Курс ЦБ на ${dt.toLocaleDateString("ru-RU")}`;
-// показываем дату полученного курса в поле даты (ЦБ ставит метку 11:30+03:00 — UTC-сдвига дня не будет)
-try{S.cbrDate=dt.toISOString().slice(0,10)}catch(_){}
+const lbl=new Date((showDate||todayStr())+"T12:00:00");
+S.cbrInfo=`✓ Курс ЦБ на ${lbl.toLocaleDateString("ru-RU")}`;
+// S.cbrDate НЕ трогаем: им управляет пользователь (пусто = сегодня/авто). Иначе авто-фетч
+// «залипал» бы на дате публикации (пт) и в след. рабочий день не обновлялся бы.
 saveDraft();render();return true}
 
 async function fetchCbr(){
 if(S.cbrBusy)return;
-// без даты ИЛИ с датой закэшированного курса (её пишет applyCbrData) — мгновенно из кэша;
-// явно выбранная другая дата уходит в архив как обычно
-if(_cbrCache&&Date.now()-_cbrCache.ts<RATES_TTL&&(!S.cbrDate||S.cbrDate===cbrDataDate(_cbrCache.data))){
-if(applyCbrData(_cbrCache.data))return}
+const showDate=S.cbrDate||todayStr(); // что показываем: выбранная дата или сегодня
+// daily-кэш отдаём только для авто (сегодня); выбранная архивная дата всегда идёт в сеть
+if(_cbrCache&&Date.now()-_cbrCache.ts<RATES_TTL&&!S.cbrDate){
+if(applyCbrData(_cbrCache.data,showDate))return}
 S.cbrBusy=true;S.cbrInfo="⏳ Загрузка курса...";renderCbrInfo();
 try{
 // работаем в UTC, чтобы дата архива не сдвигалась из-за часового пояса
@@ -51,7 +54,7 @@ date.setUTCDate(date.getUTCDate()-1);tries++}
 if(!data)throw new Error("нет данных");
 if(!date)_cbrCache={data,ts:Date.now()}; // кэшируем только «сегодня», не архив
 S.cbrBusy=false;
-if(!applyCbrData(data))throw new Error("пусто")}
+if(!applyCbrData(data,showDate))throw new Error("пусто")}
 catch(e){S.cbrBusy=false;
 S.cbrInfo="⚠ Не удалось получить курс — проверь интернет или дату";renderCbrInfo()}}
 
