@@ -71,12 +71,12 @@ if(!_mkInflight)_mkInflight=loadMarketData()
 .finally(()=>{_mkInflight=null});
 return _mkInflight}
 
-// Загрузка рыночного курса по цепочке источников; бросает, если все недоступны.
-// BestChange (нал→USDT) приходит по НЕЗАЩИЩЁННОМУ HTTP — проверяем его фиатным курсом
-// форекса (HTTPS): расхождение >35% считаем подменой и не доверяем.
+// Рыночный курс USD берём ТОЛЬКО из BestChange (наличный USDT). Биржу (CoinGecko) и
+// фиатный форекс как курс НЕ подставляем — если BestChange недоступен, бросаем ошибку
+// («рыночный курс недоступен»). Форекс (HTTPS) тянем лишь для EUR-кросса и проверки:
+// BestChange приходит по НЕЗАЩИЩЁННОМУ HTTP, расхождение >35% с фиатом считаем подменой.
 async function loadMarketData(){
-let usdRub=null,eurUsd=null,src="USDT";
-// форекс (HTTPS, опора-проверка) и BestChange — параллельно
+let eurUsd=null;
 const erP=(async()=>{try{
 const r=await fetch("https://open.er-api.com/v6/latest/USD",{signal:AbortSignal.timeout(10000)});
 if(r.ok)return await r.json()}catch(_){}return null})();
@@ -84,23 +84,14 @@ const bcP=(async()=>{try{
 const r=await fetch(MARKET_API,{signal:AbortSignal.timeout(12000)});
 if(r.ok)return await r.json()}catch(_){}return null})();
 const er=await erP;
-const forexUsd=(er&&er.rates&&parseFloat(er.rates.RUB))||0; // ₽ за 1 USD (фиат)
+const forexUsd=(er&&er.rates&&parseFloat(er.rates.RUB))||0; // ₽ за 1 USD (фиат) — только опора-проверка
 if(er){const eur=er.rates&&parseFloat(er.rates.EUR);if(eur>0)eurUsd=1/eur}
-// 1) BestChange — только свежий и подтверждённый HTTPS-опорой (форекс) в пределах ±35%.
-// без опоры НЕ доверяем (тот же MITM, что подменяет HTTP-ответ, мог уронить и форекс) → уходим на HTTPS-биржу
 const d=await bcP;
 if(d){const v=parseFloat(d.usd);
-if(v>0&&(!d.ts||Date.now()-d.ts<36e5)&&forexUsd>0&&Math.abs(v-forexUsd)/forexUsd<=0.35){usdRub=v;src="BestChange нал→USDT"}}
-// 2) CoinGecko USDT/₽ (HTTPS-биржа)
-if(!usdRub)try{
-const r=await fetch("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=rub",
-{signal:AbortSignal.timeout(10000)});
-if(r.ok){const d2=await r.json();const v=d2&&d2.tether&&parseFloat(d2.tether.rub);if(v>0){usdRub=v;src="биржа USDT"}}
-}catch(_){}
-// 3) форекс — последний фолбэк
-if(!usdRub&&forexUsd>0){usdRub=forexUsd;src="форекс"}
-if(!usdRub)throw new Error("нет данных");
-return{usd:usdRub,eurUsd,src}}
+// свежий + подтверждённый HTTPS-опорой в пределах ±35% — иначе НЕ доверяем (фолбэка нет)
+if(v>0&&(!d.ts||Date.now()-d.ts<36e5)&&forexUsd>0&&Math.abs(v-forexUsd)/forexUsd<=0.35)
+return{usd:v,eurUsd,src:"BestChange нал→USDT"}}
+throw new Error("BestChange недоступен")}
 
 function applyMarket(d){
 S.rates.USD=String(Math.round(d.usd*1e4)/1e4);
@@ -124,7 +115,7 @@ try{
 const d=await loadMarketShared();
 S.cbrBusy=false;applyMarket(d)}
 catch(e){S.cbrBusy=false;
-S.cbrInfo="⚠ Рыночный курс недоступен — проверь интернет или попробуй ЦБ";renderCbrInfo()}}
+S.cbrInfo="⚠ Наличный курс (BestChange) недоступен — попробуй ещё раз, жми «КУРС ЦБ» или введи вручную";renderCbrInfo()}}
 
 // ===== ТИХИЙ ПРОГРЕВ ПРИ ЗАПУСКЕ =====
 // К моменту нажатия кнопок ответы уже готовы: кнопки срабатывают мгновенно,
