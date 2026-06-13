@@ -294,6 +294,19 @@ color:#fff;display:flex;align-items:center;box-shadow:0 2px 8px rgba(52,152,219,
 .wh-note{margin-top:8px;padding:8px 10px;background:var(--input);border:1px solid var(--br3);
 border-radius:8px;font-size:11px;color:var(--t2);line-height:1.5;white-space:pre-wrap;word-break:break-word}
 
+/* ===== История изменений по машине ===== */
+.wh-hist{margin-top:10px;border-top:1px solid var(--line2);padding-top:8px}
+.wh-hist-head{display:flex;justify-content:space-between;align-items:center;cursor:pointer;
+color:var(--t3);font-size:11px;font-weight:600;letter-spacing:.5px;user-select:none}
+.wh-hist-body{margin-top:8px;animation:fadeIn .2s ease}
+.wh-hist-row{display:flex;gap:8px;align-items:flex-start;padding:5px 0}
+.wh-hist-row+.wh-hist-row{border-top:1px solid var(--line2)}
+.wh-hist-ic{font-size:14px;line-height:1.3;flex:0 0 auto}
+.wh-hist-info{flex:1;min-width:0}
+.wh-hist-lbl{color:var(--t1);font-size:11px;font-weight:600;word-break:break-word}
+.wh-hist-d{color:var(--t3);font-weight:400}
+.wh-hist-date{color:var(--t5);font-size:10px;margin-top:1px}
+
 /* ===== Поиск и сортировка склада ===== */
 .wh-search{width:100%;padding:10px 14px;background:var(--card);border:1px solid var(--br);border-radius:10px;
 color:var(--t1);font-size:13px;font-family:'JetBrains Mono',monospace;outline:none;margin-bottom:8px}

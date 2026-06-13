@@ -6,7 +6,8 @@ const cleanRates={};Object.keys(S.rates).forEach(k=>{cleanRates[k]=numStr(S.rate
 S.warehouse.unshift({id:uid(),name:S.carName.trim(),date:new Date().toISOString(),
 rates:cleanRates,eurRate:cleanRates.EUR||"",usdRate:cleanRates.USD||"",
 entries:JSON.parse(JSON.stringify(S.entries)),note:"",updatedAt:new Date().toISOString(),
-status:"stock",sellPrice:"",sellCurrency:"RUB",sellDate:null,sellRates:null,sellEurRate:"",sellUsdRate:""});
+status:"stock",sellPrice:"",sellCurrency:"RUB",sellDate:null,sellRates:null,sellEurRate:"",sellUsdRate:"",history:[]});
+addHist(S.warehouse[0],"created",fmt(carCost(S.warehouse[0]))+" ₽");
 saveWH();cloudUpsert(S.warehouse[0]);
 S.carName="";S.entries=[];S.display="0";S.curCat=0;S.showReceipt=false;S.receiptImage=null;S.sellPrice="";
 S.expandedCar=S.warehouse[0].id;saveDraft();render();
@@ -28,9 +29,13 @@ car.sellRates={};
 if(S.sellFormCurr!=="RUB")car.sellRates[S.sellFormCurr]=numStr(sRate);
 // зеркала для совместимости со старыми версиями
 car.sellEurRate=car.sellRates.EUR||"";car.sellUsdRate=car.sellRates.USD||""}
+// краткая запись о продаже для истории/деталей: «1 500 000 ₽» или «20 000 € → 1 904 048 ₽»
+function saleStr(car){const s=curInfo(car.sellCurrency);const p=fmt(parseNum(car.sellPrice)||0)+" "+s.symbol;
+return car.sellCurrency!=="RUB"?p+" → "+fmt(carSellRub(car))+" ₽":p}
 function doSell(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 if(!validateSaleForm())return;
 applySaleForm(car);car.status="sold";car.sellDate=new Date().toISOString();
+addHist(car,"sold",saleStr(car));
 S.sellingCarId=null;S.sellEditMode=false;touch(car);saveWH();cloudUpsert(car);render()}
 // изменить цену уже проданной: статус и дату продажи не трогаем
 function startEditSale(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
@@ -39,7 +44,9 @@ S.sellFormPrice=String(car.sellPrice||"");S.sellFormCurr=car.sellCurrency||"RUB"
 S.sellFormRate=car.sellCurrency!=="RUB"?String(carSellRate(car)||""):"";render()}
 function saveSaleEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car||car.status!=="sold")return;
 if(!validateSaleForm())return;
+const was=saleStr(car); // фиксируем «было» до применения новых значений
 applySaleForm(car);
+const now=saleStr(car);if(now!==was)addHist(car,"priceEdit",was+" → "+now);
 S.sellingCarId=null;S.sellEditMode=false;touch(car);saveWH();cloudUpsert(car);render()}
 function delCar(id){showConfirm("Удалить машину из базы?",()=>{
 const idx=S.warehouse.findIndex(c=>c.id===id);if(idx<0)return;
@@ -54,9 +61,11 @@ const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 S.sellingCarId=null;S.sellEditMode=false; // закрыть форму правки цены, иначе СОХРАНИТЬ запишет данные продажи на сток
 car.status="stock";car.sellPrice="";car.sellCurrency="RUB";car.sellDate=null;
 car.sellRates=null;car.sellEurRate="";car.sellUsdRate="";
+addHist(car,"returned","");
 touch(car);saveWH();cloudUpsert(car);render()})}
-function togExp(id){S.expandedCar=S.expandedCar===id?null:id;S.sellingCarId=null;S.sellEditMode=false;
+function togExp(id){S.expandedCar=S.expandedCar===id?null:id;S.sellingCarId=null;S.sellEditMode=false;S.histOpen=false;
 if(S.editingCarId!==id)S.editingCarId=null;render()}
+function togHist(){S.histOpen=!S.histOpen;render()}
 function cpToCalc(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 S.carName=car.name;
 const cr=carRates(car);Object.keys(cr).forEach(c=>{if(cr[c])S.rates[c]=cr[c]});
@@ -83,6 +92,10 @@ function saveCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car||!S.ed
 if(!String(S.editName||"").trim()){alert("Введите название авто");return}
 for(const e of S.editCarEntries){if(!(parseNum(e.amount)>0)){alert("Проверьте суммы — есть пустые или нулевые");return}
 if(e.currency!=="RUB"&&!(parseNum(e.rate)>0)){alert("Проверьте курсы — есть пустые");return}}
+const oldCost=carCost(car); // себестоимость до правки — для истории
+// сигнатура значимых полей (дата — на уровне дня): событие пишем, только если реально что-то изменилось
+const sig=c=>JSON.stringify({n:c.name||"",no:c.note||"",a:c.askPrice||"",d:carDateInput(c),e:c.entries});
+const before=sig(car);
 car.entries=S.editCarEntries.map(e=>{const{_new,...rest}=e;
 return{...rest,amount:parseNum(e.amount),rate:e.currency==="RUB"?"":numStr(e.rate)}});
 car.name=S.editName.trim();
@@ -90,6 +103,8 @@ car.note=String(S.editNote||"").trim().slice(0,500);
 const ap=parseNum(S.editAskPrice);car.askPrice=ap>0?String(ap):"";
 // пустую/битую дату не трогаем; иначе фиксируем полдень выбранного дня (без сдвига пояса)
 if(/^\d{4}-\d{2}-\d{2}$/.test(S.editDate||"")){const d=new Date(S.editDate+"T12:00:00");if(!isNaN(d))car.date=d.toISOString()}
+if(sig(car)!==before){const newCost=carCost(car);const dCost=Math.round(newCost)-Math.round(oldCost); // дельта на уровне ₽
+addHist(car,"edited",fmt(newCost)+" ₽"+(dCost?" ("+(dCost>0?"+":"")+fmt(dCost)+")":""));}
 S.editingCarId=null;S.editCarEntries=null;touch(car);saveWH();cloudUpsert(car);render()}
 function updEditEntry(i,field,val){if(!S.editCarEntries)return;S.editCarEntries[i][field]=val;updEditCost()}
 function updEditCost(){if(!S.editCarEntries)return;
@@ -298,7 +313,14 @@ h+=`<div class="btn-action btn-yellow tip-end" style="flex:0 0 auto;padding:10px
 <div class="btn-action btn-blue tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Поделиться чеком" aria-label="Поделиться чеком" onclick="event.stopPropagation();carShare('${esc(car.id)}')">📤</div>
 <div class="btn-action btn-red tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Удалить машину" aria-label="Удалить машину" onclick="event.stopPropagation();delCar('${esc(car.id)}')">🗑</div></div>`;
 if(S.carReceipts[car.id])h+=`<div class="saved-preview"><p>✅ ЧЕК СОХРАНЁН — ЗАЖМИТЕ ДЛЯ КОПИРОВАНИЯ</p><img src="${S.carReceipts[car.id]}" alt="Чек"></div>`;
-h+=`</div>`}
+const hist=carHistory(car);
+h+=`<div class="wh-hist"><div class="wh-hist-head" onclick="event.stopPropagation();togHist()">
+<span>🕓 История (${hist.length})</span><span class="coll-arrow" style="transform:rotate(${S.histOpen?180:0}deg)">▾</span></div>`;
+if(S.histOpen)h+=`<div class="wh-hist-body">${hist.slice().reverse().map(ev=>{const m=HIST_META[ev.e]||{icon:"•",label:ev.e};
+return `<div class="wh-hist-row"><span class="wh-hist-ic">${m.icon}</span>
+<div class="wh-hist-info"><div class="wh-hist-lbl">${esc(m.label)}${ev.d?` · <span class="wh-hist-d">${esc(ev.d)}</span>`:""}</div>
+<div class="wh-hist-date">${esc(histDate(ev.t))}</div></div></div>`}).join("")}</div>`;
+h+=`</div></div>`}
 
 if(selling){h+=`<div class="wh-sell-form" onclick="event.stopPropagation()">
 <div style="color:#888;font-size:11px;font-weight:600;margin-bottom:8px">${S.sellEditMode?"ИЗМЕНИТЬ ПРОДАЖУ":"ОФОРМИТЬ ПРОДАЖУ"}</div>

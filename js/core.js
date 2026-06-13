@@ -16,7 +16,7 @@ const DEFAULT_ACTIVE=["EUR","USD"];
 
 let S={carName:"",rates:{...DEFAULT_RATES},activeCur:[...DEFAULT_ACTIVE],entries:[],curCat:0,display:"0",
 showReceipt:false,showSettings:true,showProfit:true,sellPrice:"",sellCurrency:"RUB",receiptImage:null,
-warehouse:[],expandedCar:null,sellingCarId:null,whSearch:"",whSort:"new",
+warehouse:[],expandedCar:null,sellingCarId:null,whSearch:"",whSort:"new",histOpen:false,
 sellFormPrice:"",sellFormCurr:"RUB",sellFormRate:"",sellEditMode:false,
 editingEntry:null,editValue:"",editCurr:"RUB",editRate:"",
 editingCarId:null,editCarEntries:null,bulkRates:{},editName:"",editDate:"",editAskPrice:"",editNote:"",targetMarkup:"",
@@ -83,6 +83,26 @@ const n=parseFloat(s);
 return isFinite(n)&&Math.abs(n)<=1e12?n:NaN}
 // Каноничная строка для хранения: "83,45" → "83.45", мусор → "" (всегда точка)
 function numStr(v){const n=parseNum(v);return isFinite(n)?String(n):""}
+// ===== ИСТОРИЯ ИЗМЕНЕНИЙ ПО МАШИНЕ (ключевые события) =====
+const HIST_EV=["created","edited","sold","priceEdit","returned"];
+const HIST_META={
+created:{icon:"🏭",label:"Создана"},
+edited:{icon:"✏️",label:"Изменены данные"},
+sold:{icon:"💰",label:"Продана"},
+priceEdit:{icon:"📈",label:"Изменена цена продажи"},
+returned:{icon:"↩️",label:"Возврат на склад"}};
+// добавить событие в историю машины (с обрезкой текста и лимитом 50)
+function addHist(car,e,d){if(!car)return;if(!Array.isArray(car.history))car.history=[];
+car.history.push({t:new Date().toISOString(),e:String(e),d:d?String(d).slice(0,120):""});
+if(car.history.length>50)car.history=car.history.slice(-50)}
+// список событий для показа (по возрастанию t); старым машинам синтезируем «создана» из даты
+function carHistory(car){
+const h=(Array.isArray(car.history)?car.history:[]).filter(x=>x&&x.t&&HIST_EV.includes(x.e)).slice();
+if(!h.some(x=>x.e==="created"))h.unshift({t:car.date,e:"created",d:""});
+return h.sort((a,b)=>new Date(a.t)-new Date(b.t))}
+// дата+время события: 13.06.26 04:21
+function histDate(t){try{const d=new Date(t);if(isNaN(d))return"";
+return d.toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit",year:"2-digit"})+" "+d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"})}catch(e){return""}}
 // Курс позиции: свой (зафиксированный), иначе из карты курсов машины/черновика
 function entryRate(e,rates){if(e.currency==="RUB")return 1;
 const own=parseNum(e.rate);if(own>0)return own;
@@ -136,6 +156,13 @@ sellEurRate:String((sellRates&&sellRates.EUR)||""),
 sellUsdRate:String((sellRates&&sellRates.USD)||""),
 askPrice:(()=>{const ap=parseNum(c.askPrice);return ap>0?String(ap):""})(),
 note:typeof c.note==="string"?c.note.slice(0,500):"",
+// история ключевых событий: чистим типы, отбрасываем мусор, лимит 50
+history:(Array.isArray(c.history)?c.history:[]).map(h=>{
+if(!h||typeof h!=="object")return null;
+const e=String(h.e||"");if(!HIST_EV.includes(e))return null;
+const t=(typeof h.t==="string")?(()=>{const d=new Date(h.t);return isNaN(d)?"":d.toISOString()})():"";
+if(!t)return null;
+return{t,e,d:typeof h.d==="string"?h.d.slice(0,120):""}}).filter(Boolean).slice(-50),
 // метка свежести → канон. UTC Z-форма, чтобы строковое сравнение в слиянии было хронологически верным
 updatedAt:(()=>{const s=c.updatedAt;if(typeof s!=="string"||!s)return"";const d=new Date(s);return isNaN(d)?"":d.toISOString()})()}}
 // Карта курсов машины: новый формат — car.rates, старый — eurRate/usdRate
