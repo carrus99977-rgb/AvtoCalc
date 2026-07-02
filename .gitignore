@@ -1,3 +1,6 @@
 .DS_Store
 .playwright-mcp/
 node_modules/
+
+# локальный конфиг Claude Code (dev-only)
+.claude/

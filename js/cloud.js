@@ -1,10 +1,13 @@
 // ===== CLOUD SYNC (Supabase) =====
 // synced=true ТОЛЬКО после полностью успешного fullSync (локальное == облако). Любая мутация/
 // импорт/ошибка сбрасывают его. На выходе по нему решаем, безопасно ли стирать локальные данные.
-let CL={url:"",key:"",sb:null,user:null,email:"",pass:"",queue:[],busy:false,syncing:false,pendingFullSync:false,loggingOut:false,localRev:0,synced:false,status:"",showSetup:false};
+let CL={url:"",key:"",sb:null,user:null,email:"",pass:"",queue:[],busy:false,syncing:false,pendingFullSync:false,loggingOut:false,ownerGate:false,localRev:0,synced:false,status:"",showSetup:false};
 function loadCloud(){
 try{const c=localStorage.getItem("autoCalc_cloud");if(c){const cc=JSON.parse(c);CL.url=cc.url||"";CL.key=cc.key||""}}catch(e){}
-try{const q=localStorage.getItem("autoCalc_queue");if(q){const a=JSON.parse(q);CL.queue=Array.isArray(a)?a:[]}}catch(e){}}
+try{const q=localStorage.getItem("autoCalc_queue");if(q){const a=JSON.parse(q);
+// битые операции (старые версии/повреждённая запись) отбрасываем: кривая головная
+// операция вечно роняла бы flushQueue и намертво стопорила всю очередь
+CL.queue=(Array.isArray(a)?a:[]).filter(o=>o&&((o.t==="u"&&o.car&&o.car.id)||(o.t==="d"&&o.id)))}}catch(e){}}
 function saveCloudCfg(){try{localStorage.setItem("autoCalc_cloud",JSON.stringify({url:CL.url,key:CL.key}))}catch(e){}}
 function saveQueue(){try{localStorage.setItem("autoCalc_queue",JSON.stringify(CL.queue))}catch(e){}}
 loadCloud();
@@ -13,10 +16,17 @@ const SB_KEY_DEFAULT="sb_publishable_K0XaShzvYG4gb7OEJm8SNQ_sCyIiCZr";
 if(!CL.url)CL.url=SB_URL_DEFAULT;
 if(!CL.key)CL.key=SB_KEY_DEFAULT;
 
+// Версия зафиксирована + SRI-хэш: ни CDN, ни автор пакета не смогут незаметно подменить
+// код, у которого есть доступ ко всем данным. При обновлении версии пересчитать хэш:
+//   curl -s <URL> | openssl dgst -sha384 -binary | openssl base64 -A
+// Пиновать только оригинальный файл пакета (dist/umd/supabase.js — он уже минифицирован):
+// .min.js у jsdelivr автогенерируется и байтово нестабилен, SRI с ним однажды сломается.
+const SB_LIB_URL="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js";
+const SB_LIB_SRI="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9";
 function loadSbLib(cb){
 if(window.supabase)return cb();
 const s=document.createElement("script");
-s.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
+s.src=SB_LIB_URL;s.integrity=SB_LIB_SRI;s.crossOrigin="anonymous";
 s.onload=cb;s.onerror=()=>{setStatus("нет интернета");};
 document.head.appendChild(s)}
 
@@ -104,8 +114,21 @@ function afterAuth(){
 const uid=CL.user&&CL.user.id;
 if(!uid){fullSync();return}
 let owner="";try{owner=localStorage.getItem("autoCalc_owner")||""}catch(e){}
+if(owner&&owner!==uid&&(S.warehouse.length||CL.queue.length)){
+// На устройстве живые данные ДРУГОГО аккаунта: молча стирать нельзя (внезапная потеря,
+// напр. свежего офлайн-импорта), сливать в новый аккаунт тоже нельзя (утечка чужого
+// склада) — спрашиваем. Пока вопрос открыт, ownerGate глушит flushQueue/fullSync,
+// иначе фоновый синк (реконнект и т.п.) успел бы отправить чужую очередь в новый аккаунт.
+CL.ownerGate=true;
+showConfirm("На этом устройстве — данные другого аккаунта. Войти и стереть их с устройства? (в облаке прежнего аккаунта они остаются, если синхронизировались)",
+()=>{CL.ownerGate=false;clearLocalData();
+try{localStorage.setItem("autoCalc_owner",uid)}catch(e){}
+setStatus("новый аккаунт — загрузка из облака");fullSync();render()},
+()=>{CL.ownerGate=false;if(CL.sb)CL.sb.auth.signOut();CL.user=null;
+setStatus("вход отменён — данные не тронуты");render()});
+return}
 if(owner&&owner!==uid){
-clearLocalData(); // другой аккаунт — чужие локальные данные не сливаем в новый, тянем из его облака
+clearLocalData(); // другой аккаунт без локальных данных — просто тянем его облако
 setStatus("новый аккаунт — загрузка из облака");
 }
 try{localStorage.setItem("autoCalc_owner",uid)}catch(e){}
@@ -121,7 +144,17 @@ function tsKey(s){if(typeof s!=="string"||!s)return"";const d=new Date(s);return
 
 // localRev++ на каждой локальной мутации (upsert/delete) — fullSync ловит по нему изменения,
 // случившиеся во время сетевого select, и не сливается против устаревшего снимка облака
-function qOp(op){if(!CL.url)return;CL.localRev++;CL.synced=false;CL.queue.push(op);saveQueue();flushQueue()}
+function qOp(op){if(!CL.url)return;CL.localRev++;CL.synced=false;
+// Компактация: в облаке важна только ПОСЛЕДНЯЯ операция по машине (и upsert, и надгробие
+// целиком перезаписывают строку), поэтому прежние операции того же id выкидываем.
+// Без этого у пользователя, ни разу не входившего в облако, очередь росла бы бесконечно
+// (полная копия машины на каждую правку) и добивала квоту localStorage, после чего
+// setItem молча падает и перестаёт сохраняться уже сам склад.
+const id=op.t==="u"?String(op.car.id):String(op.id);
+const from=CL.busy?1:0; // головную не трогаем: flushQueue сейчас отправляет её и снимет своим shift()
+for(let i=CL.queue.length-1;i>=from;i--){const q=CL.queue[i];
+if((q.t==="u"?String(q.car&&q.car.id):String(q.id))===id)CL.queue.splice(i,1)}
+CL.queue.push(op);saveQueue();flushQueue()}
 function cloudUpsert(car){qOp({t:"u",car:JSON.parse(JSON.stringify(car))})}
 // удаление — мягкое: фиксируем момент, в облако пойдёт надгробие (не delete)
 function cloudDelete(id){qOp({t:"d",id,ts:new Date().toISOString()})}
@@ -136,7 +169,7 @@ function pushTomb(id,ts){const t=ts||new Date().toISOString();
 return CL.sb.from("cars").upsert({id,data:{id,deletedAt:t,updatedAt:t},updated_at:t})}
 
 async function flushQueue(){
-if(CL.busy||!CL.sb||!CL.user||!navigator.onLine||!CL.queue.length)return;
+if(CL.busy||CL.ownerGate||!CL.sb||!CL.user||!navigator.onLine||!CL.queue.length)return;
 const acting=CL.user.id; // от чьего имени отправляем (общий клиент CL.sb может перелогиниться)
 CL.busy=true;setStatus("синхронизация...");
 try{
@@ -153,7 +186,7 @@ CL.busy=false;
 if(CL.pendingFullSync&&!CL.queue.length&&CL.sb&&CL.user&&navigator.onLine){CL.pendingFullSync=false;fullSync()}}
 
 async function fullSync(){
-if(CL.syncing||!CL.sb||!CL.user||!navigator.onLine)return; // не запускаем второй слияние поверх идущего
+if(CL.syncing||CL.ownerGate||!CL.sb||!CL.user||!navigator.onLine)return; // второе слияние поверх идущего не запускаем; ownerGate — открыт вопрос о смене владельца
 const acting=CL.user.id; // аккаунт, от чьего имени синхронизируемся — стережёмся перелогина в процессе
 CL.syncing=true;
 setStatus("синхронизация...");

@@ -107,7 +107,7 @@ ${Object.keys(CUR).filter(c=>c!=="RUB").map(c=>`<div class="cur-chip ${S.activeC
 <div class="cbr-btn" onclick="fetchCbr()">↻ КУРС ЦБ</div>
 <div class="cbr-btn cbr-market" onclick="fetchMarket()" title="Рыночный (обменный) курс — USDT/₽">₿ РЫНОК</div>
 <div class="cbr-btn cbr-clear" onclick="clearRates()" title="Очистить курсы и дату">✕</div></div>
-<div class="rate-hint" id="cbr-info">${S.cbrInfo||"«КУРС ЦБ» — официальный курс (можно на дату). «₿ РЫНОК» — живой обменный уровень (USDT/₽)."}</div>
+<div class="rate-hint" id="cbr-info">${esc(S.cbrInfo)||"«КУРС ЦБ» — официальный курс (можно на дату). «₿ РЫНОК» — живой обменный уровень (USDT/₽)."}</div>
 <div class="rate-hint">💡 Курс фиксируется за каждой позицией в момент добавления. Платишь таможню через месяц по новому курсу — поменяй курс здесь перед добавлением позиции, либо отредактируй позицию на складе.</div></div>`:""}</div>
 <div class="categories">${CATS.map((c,i)=>`<div class="cat-btn ${S.curCat===i?"active":""}" onclick="S.curCat=${i};saveDraft();render()">${c.icon} ${c.label}</div>`).join("")}</div>
 <div class="calc-body"><div class="display-box">

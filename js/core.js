@@ -216,9 +216,10 @@ if(!last){try{localStorage.setItem("autoCalc_lastBackup",String(Date.now()))}cat
 return Date.now()-last>7*86400000}
 
 // ===== CONFIRM =====
-function showConfirm(msg,fn){S.confirmAction={msg,fn};renderConfirm()}
-function hideConfirm(){S.confirmAction=null;renderConfirm()}
-function confirmYes(){const f=S.confirmAction&&S.confirmAction.fn;hideConfirm();if(f)f()}
+// onCancel (необязателен) зовётся при любом закрытии без «ДА»: кнопка ОТМЕНА или клик по фону
+function showConfirm(msg,fn,onCancel){S.confirmAction={msg,fn,onCancel};renderConfirm()}
+function hideConfirm(){const c=S.confirmAction;S.confirmAction=null;renderConfirm();if(c&&c.onCancel)c.onCancel()}
+function confirmYes(){const c=S.confirmAction;S.confirmAction=null;renderConfirm();if(c&&c.fn)c.fn()}
 function renderConfirm(){const el=document.getElementById("confirm-dialog");if(!S.confirmAction){el.innerHTML="";return}
 el.innerHTML=`<div class="confirm-overlay" onclick="hideConfirm()"><div class="confirm-box" onclick="event.stopPropagation()">
 <p>${esc(S.confirmAction.msg)}</p><div class="confirm-btns">

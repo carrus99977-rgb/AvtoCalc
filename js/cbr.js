@@ -80,8 +80,12 @@ const r=await fetch(MARKET_API,{signal:AbortSignal.timeout(12000)});
 if(!r.ok)throw new Error("market http "+r.status);
 const d=await r.json();
 const v=parseFloat(d&&d.usd);
-// принимаем только свежий ответ (защита от любого промежуточного кэша)
-if(!(v>0)||(d.ts&&Date.now()-d.ts>=36e5))throw new Error("BestChange недоступен");
+// Принимаем только свежий ответ (защита от промежуточного кэша). Свежесть меряем по часам
+// СЕРВЕРА (заголовок Date, если CORS его отдал) — сбитые часы телефона не должны глушить
+// кнопку; без заголовка — часы устройства с допуском 6 ч на сбитое время (легитимная
+// давность CDN-кэша ≤ 40 мин, так что и щедрый порог отсекает по-настоящему тухлое)
+const srv=Date.parse(r.headers.get("date")||"");
+if(!(v>0)||(d.ts&&(srv||Date.now())-d.ts>=(srv?36e5:216e5)))throw new Error("BestChange недоступен");
 const e=parseFloat(d&&d.eur);
 return{usd:v,eur:e>0?e:0,src:d.src||"BestChange продажа"}}
 
