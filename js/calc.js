@@ -63,6 +63,22 @@ S.sellPrice=String(Math.round(price));saveDraft();render()}
 function clearRates(){S.activeCur.forEach(c=>S.rates[c]="");
 S.cbrDate="";S.cbrInfo="";saveDraft();render()}
 
+// Полная очистка расчёта одной кнопкой: прикидка «на посмотреть» не идёт на склад,
+// и без этого её приходилось вычищать вручную по позиции. Курсы НЕ трогаем (они про
+// текущий день, не про машину; для них свой ✕). С подтверждением и отменой, как delCar.
+function clearCalc(){
+const snap={carName:S.carName,entries:S.entries,display:S.display,curCat:S.curCat,
+sellPrice:S.sellPrice,targetMarkup:S.targetMarkup,sellCurrency:S.sellCurrency};
+showConfirm("Очистить расчёт? Название, позиции и цена продажи будут стёрты (курсы останутся).",()=>{
+S.carName="";S.entries=[];S.display="0";S.curCat=0;
+S.sellPrice="";S.targetMarkup="";S.sellCurrency="RUB";
+S.showReceipt=false;S.receiptImage=null;S.editingEntry=null;
+saveDraft();render();
+showToast("Расчёт очищен","Отменить",()=>{
+S.carName=snap.carName;S.entries=snap.entries;S.display=snap.display;S.curCat=snap.curCat;
+S.sellPrice=snap.sellPrice;S.targetMarkup=snap.targetMarkup;S.sellCurrency=snap.sellCurrency;
+saveDraft();render()})})}
+
 // Включение/выключение валюты в настройках
 
 function togCur(c){const i=S.activeCur.indexOf(c);
@@ -152,7 +168,8 @@ ${e.currency!=="RUB"?`<div class="entry-rub">≈ ${fmt(entryRub(e,S.rates))} ₽
 <div class="entry-act del" onclick="delEntry(${i})">✕</div></div></div>`}});
 h+=`<div style="padding:0 12px 12px;display:flex;gap:8px">
 <div class="btn-action btn-yellow" style="flex:1;margin:0" onclick="printR()">🧾 ЧЕК</div>
-<div class="btn-action btn-green" style="flex:1;margin:0" onclick="addToWH()">🏭 НА СКЛАД</div></div></div>`;
+<div class="btn-action btn-green" style="flex:1;margin:0" onclick="addToWH()">🏭 НА СКЛАД</div>
+<div class="btn-action btn-red" style="flex:0 0 auto;margin:0;padding:10px 14px" title="Очистить расчёт" aria-label="Очистить расчёт" onclick="clearCalc()">🗑</div></div></div>`;
 
 h+=`<div class="profit-box"><div class="coll-header" onclick="S.showProfit=!S.showProfit;render()">
 <span>📊 Расчёт прибыли</span><span class="coll-arrow" style="transform:rotate(${S.showProfit?180:0}deg)">▾</span></div>
