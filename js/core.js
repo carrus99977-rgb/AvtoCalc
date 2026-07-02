@@ -17,7 +17,7 @@ const DEFAULT_ACTIVE=["EUR","USD"];
 let S={carName:"",rates:{...DEFAULT_RATES},activeCur:[...DEFAULT_ACTIVE],entries:[],curCat:0,display:"0",
 showReceipt:false,showSettings:true,showProfit:true,sellPrice:"",sellCurrency:"RUB",receiptImage:null,
 warehouse:[],expandedCar:null,sellingCarId:null,whSearch:"",whSort:"new",histOpen:false,
-sellFormPrice:"",sellFormCurr:"RUB",sellFormRate:"",sellEditMode:false,
+sellFormPrice:"",sellFormCurr:"RUB",sellFormRate:"",sellFormDate:"",sellEditMode:false,
 editingEntry:null,editValue:"",editCurr:"RUB",editRate:"",
 editingCarId:null,editCarEntries:null,bulkRates:{},editName:"",editDate:"",editAskPrice:"",editNote:"",targetMarkup:"",
 cbrBusy:false,cbrDate:"",cbrInfo:"",
@@ -95,7 +95,7 @@ const HIST_META={
 created:{icon:"🏭",label:"Создана"},
 edited:{icon:"✏️",label:"Изменены данные"},
 sold:{icon:"💰",label:"Продана"},
-priceEdit:{icon:"📈",label:"Изменена цена продажи"},
+priceEdit:{icon:"📈",label:"Изменена продажа"},
 returned:{icon:"↩️",label:"Возврат на склад"}};
 // добавить событие в историю машины (с обрезкой текста и лимитом 50)
 function addHist(car,e,d){if(!car)return;if(!Array.isArray(car.history))car.history=[];

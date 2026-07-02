@@ -14,7 +14,7 @@ S.expandedCar=S.warehouse[0].id;saveDraft();render();
 setTimeout(()=>document.getElementById("wh-section")?.scrollIntoView({behavior:"smooth"}),150)}
 
 function startSell(id){S.sellingCarId=id;S.editingCarId=null;S.sellEditMode=false;S.sellFormPrice="";S.sellFormCurr="RUB";
-S.sellFormRate="";render()}
+S.sellFormRate="";S.sellFormDate=todayStr();render()}
 function cancelSell(){S.sellingCarId=null;S.sellEditMode=false;render()}
 // общая валидация и запись формы продажи (используют и продажа, и правка цены)
 function validateSaleForm(){
@@ -22,6 +22,11 @@ if(!(parseNum(S.sellFormPrice)>0)){alert("Введите цену продажи
 const sRate=S.sellFormRate||S.rates[S.sellFormCurr]||"";
 if(S.sellFormCurr!=="RUB"&&!(parseNum(sRate)>0)){alert("Введите курс продажи");return false}
 return true}
+// дата продажи из формы: yyyy-mm-dd → ISO (полдень выбранного дня, без сдвига пояса);
+// пустая/битая → fallback (при продаже — сейчас, при правке — прежняя дата)
+function sellFormDateISO(fb){
+if(!/^\d{4}-\d{2}-\d{2}$/.test(S.sellFormDate||""))return fb;
+const d=new Date(S.sellFormDate+"T12:00:00");return isNaN(d)?fb:d.toISOString()}
 function applySaleForm(car){
 car.sellPrice=numStr(S.sellFormPrice);car.sellCurrency=S.sellFormCurr; // храним каноничную строку (точка)
 const sRate=S.sellFormRate||S.rates[S.sellFormCurr]||"";
@@ -34,19 +39,23 @@ function saleStr(car){const s=curInfo(car.sellCurrency);const p=fmt(parseNum(car
 return car.sellCurrency!=="RUB"?p+" → "+fmt(carSellRub(car))+" ₽":p}
 function doSell(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 if(!validateSaleForm())return;
-applySaleForm(car);car.status="sold";car.sellDate=new Date().toISOString();
+applySaleForm(car);car.status="sold";car.sellDate=sellFormDateISO(new Date().toISOString());
 addHist(car,"sold",saleStr(car));
 S.sellingCarId=null;S.sellEditMode=false;touch(car);saveWH();cloudUpsert(car);render()}
 // изменить цену уже проданной: статус и дату продажи не трогаем
 function startEditSale(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 S.sellingCarId=id;S.sellEditMode=true;S.editingCarId=null;
 S.sellFormPrice=String(car.sellPrice||"");S.sellFormCurr=car.sellCurrency||"RUB";
-S.sellFormRate=car.sellCurrency!=="RUB"?String(carSellRate(car)||""):"";render()}
+S.sellFormRate=car.sellCurrency!=="RUB"?String(carSellRate(car)||""):"";
+S.sellFormDate=car.sellDate?isoToDateInput(car.sellDate):todayStr();render()}
 function saveSaleEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car||car.status!=="sold")return;
 if(!validateSaleForm())return;
-const was=saleStr(car); // фиксируем «было» до применения новых значений
+const was=saleStr(car),wasD=car.sellDate; // фиксируем «было» до применения новых значений
 applySaleForm(car);
-const now=saleStr(car);if(now!==was)addHist(car,"priceEdit",was+" → "+now);
+car.sellDate=sellFormDateISO(car.sellDate); // продал вчера, внёс сегодня — правится и дата
+const now=saleStr(car),dCh=isoToDateInput(wasD||"")!==isoToDateInput(car.sellDate||"");
+if(now!==was||dCh)addHist(car,"priceEdit",
+(now!==was?was+" → "+now:"")+(dCh?(now!==was?" · ":"")+"дата: "+(wasD?dShort(wasD):"—")+" → "+(car.sellDate?dShort(car.sellDate):"—"):""));
 S.sellingCarId=null;S.sellEditMode=false;touch(car);saveWH();cloudUpsert(car);render()}
 function delCar(id){showConfirm("Удалить машину из базы?",()=>{
 const idx=S.warehouse.findIndex(c=>c.id===id);if(idx<0)return;
@@ -80,9 +89,10 @@ if(S.entries.length)showConfirm("Заменить текущий расчёт д
 else doCopy()}
 
 // ===== CAR EDIT MODE (per-entry rates and amounts) =====
-// ISO-дата машины → yyyy-mm-dd для input[type=date] (локальный день, без сдвига пояса)
-function carDateInput(car){try{const d=new Date(car.date);if(isNaN(d))return"";
+// ISO-строка → yyyy-mm-dd для input[type=date] (локальный день, без сдвига пояса)
+function isoToDateInput(iso){try{const d=new Date(iso);if(isNaN(d))return"";
 const p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())}catch(e){return""}}
+function carDateInput(car){return isoToDateInput(car.date)}
 function startCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 S.editingCarId=id;S.sellingCarId=null;S.sellEditMode=false;S.expandedCar=id;
 S.editName=car.name;S.editDate=carDateInput(car);S.editAskPrice=car.askPrice||"";S.editNote=car.note||"";
@@ -231,12 +241,16 @@ if(sld.length)h+=`<div class="stats-bar">
 h+=`<div id="sold-list">${soldListHTML()}</div>`;
 return h}
 
+// Подсветка зависшего стока: 60+ дней — оранжево ⏳, 90+ — красно 🔥 (деньги заморожены слишком долго)
+function staleDaysHTML(car){const d=daysBetween(car.date,new Date());
+const c=d>=90?"#e74c3c":d>=60?"#e67e22":"";
+return c?` · <span style="color:${c};font-weight:700">${d} дн. на складе ${d>=90?"🔥":"⏳"}</span>`:` · ${d} дн. на складе`}
 function carCardHTML(car){
 const cost=carCost(car),exp=S.expandedCar===car.id,selling=S.sellingCarId===car.id,editing=S.editingCarId===car.id;
 const sellR=carSellRub(car),pr=sellR-cost;
 let h=`<div class="wh-card"><div class="wh-card-header" onclick="togExp('${esc(car.id)}')">
 <div><div class="wh-car-name">🚗 ${esc(car.name)}<span class="wh-status ${car.status}">${car.status==="stock"?"СКЛАД":"ПРОДАНО"}</span></div>
-<div style="color:#556;font-size:10px;margin-top:2px">${dShort(car.date)}${car.status==="stock"?` · ${daysBetween(car.date,new Date())} дн. на складе`:""}</div></div>
+<div style="color:#556;font-size:10px;margin-top:2px">${dShort(car.date)}${car.status==="stock"?staleDaysHTML(car):""}</div></div>
 <div style="text-align:right"><div class="wh-car-cost">${fmt(cost)} ₽</div>
 ${car.status==="sold"?`<div style="color:${pr>=0?"#27ae60":"#e74c3c"};font-size:11px;font-weight:600">${pr>=0?"+":""}${fmt(pr)} ₽</div>`:""}</div></div>`;
 
@@ -330,7 +344,8 @@ h+=`<div class="btn-action btn-blue" title="Название, дата, курс
 if(car.status==="stock"){h+=`<div class="btn-action btn-outline" style="flex:0 0 auto;padding:10px 14px" data-tip="В калькулятор" aria-label="Скопировать в калькулятор" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋</div>`}
 else{h+=`<div class="btn-action btn-green" title="Изменить цену продажи" onclick="event.stopPropagation();startEditSale('${esc(car.id)}')">💰 ЦЕНА</div>
 <div class="btn-action btn-outline" title="Вернуть на склад" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
-h+=`<div class="btn-action btn-yellow tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Скачать чек себе" aria-label="Скачать чек себе" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">⬇️</div>
+h+=`<div class="btn-action btn-green tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Чек клиенту: цена, БЕЗ себестоимости" aria-label="Чек для клиента" onclick="event.stopPropagation();carClientShare('${esc(car.id)}')">👤</div>
+<div class="btn-action btn-yellow tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Скачать чек себе" aria-label="Скачать чек себе" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">⬇️</div>
 <div class="btn-action btn-blue tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Поделиться чеком" aria-label="Поделиться чеком" onclick="event.stopPropagation();carShare('${esc(car.id)}')">📤</div>
 <div class="btn-action btn-red tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Удалить машину" aria-label="Удалить машину" onclick="event.stopPropagation();delCar('${esc(car.id)}')">🗑</div></div>`;
 if(S.carReceipts[car.id])h+=`<div class="saved-preview"><p>✅ ЧЕК СОХРАНЁН — ЗАЖМИТЕ ДЛЯ КОПИРОВАНИЯ</p><img src="${S.carReceipts[car.id]}" alt="Чек"></div>`;
@@ -351,6 +366,8 @@ ${[...new Set(["RUB",...S.activeCur,S.sellFormCurr])].map(c=>`<div class="pcb ${
 onclick="if(S.sellFormCurr!=='${esc(c)}'){S.sellFormCurr='${esc(c)}';S.sellFormRate=S.rates['${esc(c)}']||''}render()">${curInfo(c).symbol} ${esc(c)}</div>`).join("")}</div>
 ${S.sellFormCurr!=="RUB"?`<label class="sell-rate-lbl">КУРС НА ДАТУ ПРОДАЖИ ${curInfo(S.sellFormCurr).symbol}/₽</label>
 <input type="text" inputmode="decimal" maxlength="16" class="wh-sell-input" value="${esc(S.sellFormRate)}" oninput="S.sellFormRate=this.value">`:""}
+<label class="sell-rate-lbl">ДАТА ПРОДАЖИ (продал вчера — поставь вчера)</label>
+<input type="date" class="wh-sell-input" value="${esc(S.sellFormDate)}" min="${carDateInput(car)}" max="${todayStr()}" oninput="S.sellFormDate=this.value">
 <div style="display:flex;gap:8px;margin-top:4px">
 <div class="btn-action btn-green" style="flex:1;margin:0" onclick="${S.sellEditMode?"saveSaleEdit":"doSell"}('${esc(car.id)}')">${S.sellEditMode?"✅ СОХРАНИТЬ":"✅ ПРОДАТЬ"}</div>
 <div class="btn-action btn-outline" style="flex:0 0 auto;margin:0;padding:10px 16px" onclick="cancelSell()">✕</div></div></div>`}

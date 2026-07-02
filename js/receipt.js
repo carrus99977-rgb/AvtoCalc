@@ -113,3 +113,30 @@ S.carReceipts[id]=du;S.expandedCar=id;downloadPNG(du,car.name);render()}
 function carShare(id){
 const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 shareReceipt(buildCarReceiptPNG(car),car.name)}
+
+// ===== ЧЕК ДЛЯ КЛИЕНТА =====
+// Только машина и цена: ни себестоимости, ни прибыли, ни позиций расходов — можно смело
+// отправлять покупателю (та же философия, что у «СПИСОК»: внутренние цифры не выходят).
+// Складская машина — «цена для клиента» (askPrice), проданная — цена продажи в ₽.
+function drawClientReceiptPNG(car){
+const W=400,sc=2,cv=document.createElement("canvas"),cx=cv.getContext("2d");
+const sold=car.status==="sold";
+const price=sold?carSellRub(car):(parseNum(car.askPrice)||0);
+const tH=214;
+cv.width=W*sc;cv.height=tH*sc;cx.scale(sc,sc);cx.fillStyle="#fef9e7";cx.fillRect(0,0,W,tH);
+for(let x=6;x<W;x+=12){cx.beginPath();cx.arc(x,0,3,0,Math.PI*2);cx.fillStyle="#fff";cx.fill()}
+const px=28,rx=W-px,mx=W/2;let y=30;cx.textBaseline="top";
+cx.fillStyle="#2c2c2c";cx.font="bold 16px 'Courier New',monospace";cx.textAlign="center";
+cx.fillText(fitText(cx,"🚗 "+String(car.name||"").toUpperCase(),W-2*px),mx,y);y+=24;
+cx.font="10px 'Courier New',monospace";cx.fillStyle="#aaa";cx.fillText(ds(),mx,y);y+=18;
+cx.setLineDash([4,3]);cx.strokeStyle="#ccc";cx.lineWidth=1;cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=18;cx.setLineDash([]);
+cx.font="bold 11px 'Courier New',monospace";cx.fillStyle="#888";cx.fillText(sold?"ЦЕНА:":"ЦЕНА ДЛЯ ВАС:",mx,y);y+=20;
+cx.fillStyle="#2c2c2c";cx.font="bold 26px 'Courier New',monospace";
+cx.fillText(price>0?fmt(price)+" ₽":"ЦЕНА ПО ЗАПРОСУ",mx,y);y+=38;
+cx.setLineDash([4,3]);cx.strokeStyle="#ccc";cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=14;cx.setLineDash([]);
+cx.fillStyle="#aaa";cx.font="10px 'Courier New',monospace";cx.fillText("★ ★ ★",mx,y);
+for(let x=6;x<W;x+=12){cx.beginPath();cx.arc(x,tH,3,0,Math.PI*2);cx.fillStyle="#fff";cx.fill()}
+return cv.toDataURL("image/png")}
+function carClientShare(id){
+const car=S.warehouse.find(c=>c.id===id);if(!car)return;
+shareReceipt(drawClientReceiptPNG(car),car.name+" клиенту")}
