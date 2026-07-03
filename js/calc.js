@@ -89,7 +89,9 @@ saveDraft();render()}
 
 function prHTML(pd){const hs=pd.sell>0,ip=pd.profit>=0,c=!hs?"ntl":ip?"pos":"neg",
 bw=!hs?0:Math.min(Math.abs(pd.markup),100),bc=!hs?"#333":ip?"#27ae60":"#e74c3c";
+const mk=pd.cost>0?marketRates():null; // справочный эквивалент по рыночному курсу банка
 return`<div class="pr-row"><span class="pr-lbl">Себестоимость</span><span class="pr-val ntl">${fmt(pd.cost)} ₽</span></div>
+${mk?`<div style="text-align:right;color:#556;font-size:9px;margin-top:-4px">≈ ${fmt(pd.cost/mk.usd)} $${mk.eur?` · ${fmt(pd.cost/mk.eur)} €`:""} по рынку</div>`:""}
 <div class="pr-row"><span class="pr-lbl">Цена продажи</span><span class="pr-val ${c}">${hs?fmt(pd.sell)+" ₽":"—"}</span></div>
 <div class="pr-row"><span class="pr-lbl">Прибыль</span><span class="pr-val ${c}">${hs?(ip?"+":"")+fmt(pd.profit)+" ₽":"—"}</span></div>
 <div class="pr-row"><span class="pr-lbl">Наценка</span><span class="pr-val ${c}">${hs?(ip?"+":"")+fmtD(pd.markup,1)+"%":"—"}</span></div>

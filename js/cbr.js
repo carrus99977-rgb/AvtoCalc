@@ -66,6 +66,13 @@ function renderCbrInfo(){const el=document.getElementById("cbr-info");if(el)el.t
 // банка (backbron.kamkombank.ru). Истории нет — курс «сейчас».
 const MARKET_API="https://avto-calc.vercel.app/api/market";
 let _mkCache=null; // {usd, src, ts} — прогретый рыночный курс
+// Текущий рыночный курс для СПРАВОЧНОГО пересчёта ₽ → $/€ (строки «≈ в валюте» на карточках).
+// Поля курсов и зафиксированные позиции не трогает. null — курс не загружен (офлайн)
+// или старше 6 часов (устаревший эквивалент только вводит в заблуждение) — строка не показывается.
+function marketRates(){
+if(!_mkCache||!(_mkCache.usd>0))return null;
+if(Date.now()-_mkCache.ts>216e5)return null;
+return{usd:_mkCache.usd,eur:_mkCache.eur>0?_mkCache.eur:0}}
 let _mkInflight=null; // общий in-flight запрос: кнопка и прогрев делят одну загрузку
 function loadMarketShared(){
 if(!_mkInflight)_mkInflight=loadMarketData()
@@ -113,7 +120,12 @@ S.cbrInfo="⚠ Курс банка недоступен — попробуй е�
 // а заодно каждый запуск приложения греет CDN-кэш серверной функции.
 function prefetchRates(){
 if(navigator.onLine===false)return;
-loadMarketShared().catch(()=>{});
+loadMarketShared().then(()=>{
+// курс приехал после первого рендера — перерисовываем, чтобы появились строки «≈ в валюте»
+// (пока пользователь печатает в поле — не дёргаем, строки появятся при следующем рендере)
+const a=document.activeElement;
+if(!a||!/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))render()
+}).catch(()=>{});
 if(!S.cbrBusy)(async()=>{try{
 const r=await fetch(cbrUrl(),{signal:AbortSignal.timeout(10000)});
 if(r.ok){const d=await r.json();if(d&&d.Valute)_cbrCache={data:d,ts:Date.now()}}}catch(_){}})()}

@@ -269,10 +269,12 @@ return c?` · <span style="color:${c};font-weight:700">${d} дн. на скла�
 function carCardHTML(car){
 const cost=carCost(car),exp=S.expandedCar===car.id,selling=S.sellingCarId===car.id,editing=S.editingCarId===car.id;
 const sellR=carSellRub(car),pr=sellR-cost;
+const mk=cost>0?marketRates():null; // справочный эквивалент в валюте по рыночному курсу банка
 let h=`<div class="wh-card"><div class="wh-card-header" onclick="togExp('${esc(car.id)}')">
 <div><div class="wh-car-name">🚗 ${esc(car.name)}<span class="wh-status ${car.status}">${car.status==="stock"?"СКЛАД":car.status==="estimate"?"ПРИКИДКА":"ПРОДАНО"}</span></div>
 <div style="color:#556;font-size:10px;margin-top:2px">${dShort(car.date)}${car.status==="stock"?staleDaysHTML(car):""}</div></div>
 <div style="text-align:right"><div class="wh-car-cost">${fmt(cost)} ₽</div>
+${mk?`<div style="color:#556;font-size:9px;margin-top:1px">≈ ${fmt(cost/mk.usd)} $${mk.eur?` · ${fmt(cost/mk.eur)} €`:""}</div>`:""}
 ${car.status==="sold"?`<div style="color:${pr>=0?"#27ae60":"#e74c3c"};font-size:11px;font-weight:600">${pr>=0?"+":""}${fmt(pr)} ₽</div>`:""}</div></div>`;
 
 if(exp&&editing&&S.editCarEntries){
@@ -345,6 +347,8 @@ h+=`<div class="wh-detail-row"><span class="wh-detail-lbl">${esc(e.icon)} ${esc(
 h+=`<div class="wh-detail-row" style="border-top:2px solid var(--br2);padding-top:8px;margin-top:4px">
 <span style="color:var(--gold);font-size:12px;font-weight:700">СЕБЕСТОИМОСТЬ</span>
 <span style="color:var(--gold);font-size:14px;font-weight:700;font-family:'Oswald',sans-serif">${fmt(cost)} ₽</span></div>`;
+if(mk)h+=`<div class="wh-detail-row"><span class="wh-detail-lbl">💱 В валюте по рынку (${fmtRate(mk.usd)} ₽/$)</span>
+<span class="wh-detail-val">≈ ${fmt(cost/mk.usd)} $${mk.eur?` · ${fmt(cost/mk.eur)} €`:""}</span></div>`;
 if(car.status==="stock"&&parseNum(car.askPrice)>0)h+=`<div class="wh-detail-row">
 <span class="wh-detail-lbl">💰 Цена для клиента</span>
 <span class="wh-detail-val">${fmt(parseNum(car.askPrice))} ₽</span></div>`;
