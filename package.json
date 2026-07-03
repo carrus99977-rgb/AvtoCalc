@@ -1,5 +1,5 @@
 {
   "name": "avtocalc",
   "private": true,
-  "description": "Серверная функция api/market.js (Vercel) — без внешних зависимостей (BestChange API v2 по HTTPS, ключ в env BESTCHANGE_KEY)"
+  "description": "Серверная функция api/market.js (Vercel) — без внешних зависимостей и ключей (курс обмена Камкомбанка, backbron.kamkombank.ru)"
 }

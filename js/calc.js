@@ -121,9 +121,9 @@ ${Object.keys(CUR).filter(c=>c!=="RUB").map(c=>`<div class="cur-chip ${S.activeC
 <div class="cbr-row">
 <input type="date" class="cbr-date" value="${esc(S.cbrDate)}" max="${todayStr()}" oninput="S.cbrDate=this.value" title="Дата курса (пусто — сегодня)">
 <div class="cbr-btn" onclick="fetchCbr()">↻ КУРС ЦБ</div>
-<div class="cbr-btn cbr-market" onclick="fetchMarket()" title="Рыночный (обменный) курс — USDT/₽">₿ РЫНОК</div>
+<div class="cbr-btn cbr-market" onclick="fetchMarket()" title="Курс обмена Камкомбанка (продажа банка)">🏦 РЫНОК</div>
 <div class="cbr-btn cbr-clear" onclick="clearRates()" title="Очистить курсы и дату">✕</div></div>
-<div class="rate-hint" id="cbr-info">${esc(S.cbrInfo)||"«КУРС ЦБ» — официальный курс (можно на дату). «₿ РЫНОК» — живой обменный уровень (USDT/₽)."}</div>
+<div class="rate-hint" id="cbr-info">${esc(S.cbrInfo)||"«КУРС ЦБ» — официальный курс (можно на дату). «🏦 РЫНОК» — курс обмена Камкомбанка (продажа банка)."}</div>
 <div class="rate-hint">💡 Курс фиксируется за каждой позицией в момент добавления. Платишь таможню через месяц по новому курсу — поменяй курс здесь перед добавлением позиции, либо отредактируй позицию на складе.</div></div>`:""}</div>
 <div class="categories">${CATS.map((c,i)=>`<div class="cat-btn ${S.curCat===i?"active":""}" onclick="S.curCat=${i};saveDraft();render()">${c.icon} ${c.label}</div>`).join("")}</div>
 <div class="calc-body"><div class="display-box">
@@ -166,10 +166,12 @@ ${e.currency!=="RUB"?`<div class="entry-rate">курс ${r?fmtRate(r):"⚠ не�
 ${e.currency!=="RUB"?`<div class="entry-rub">≈ ${fmt(entryRub(e,S.rates))} ₽</div>`:""}</div>
 <div class="entry-act edit" onclick="startEdit(${i})">✎</div>
 <div class="entry-act del" onclick="delEntry(${i})">✕</div></div></div>`}});
-h+=`<div style="padding:0 12px 12px;display:flex;gap:8px">
+h+=`<div style="padding:0 12px 8px;display:flex;gap:8px">
 <div class="btn-action btn-yellow" style="flex:1;margin:0" onclick="printR()">🧾 ЧЕК</div>
-<div class="btn-action btn-green" style="flex:1;margin:0" onclick="addToWH()">🏭 НА СКЛАД</div>
-<div class="btn-action btn-red" style="flex:0 0 auto;margin:0;padding:10px 14px" title="Очистить расчёт" aria-label="Очистить расчёт" onclick="clearCalc()">🗑</div></div></div>`;
+<div class="btn-action btn-red" style="flex:0 0 auto;margin:0;padding:10px 14px" title="Очистить расчёт" aria-label="Очистить расчёт" onclick="clearCalc()">🗑</div></div>
+<div style="padding:0 12px 12px;display:flex;gap:8px">
+<div class="btn-action btn-blue" style="flex:1;margin:0" title="Сохранить как прикидку — не склад, не считается в заморожено" onclick="addEstimate()">📝 В ПРИКИДКИ</div>
+<div class="btn-action btn-green" style="flex:1;margin:0" onclick="addToWH()">🏭 НА СКЛАД</div></div></div>`;
 
 h+=`<div class="profit-box"><div class="coll-header" onclick="S.showProfit=!S.showProfit;render()">
 <span>📊 Расчёт прибыли</span><span class="coll-arrow" style="transform:rotate(${S.showProfit?180:0}deg)">▾</span></div>

@@ -1,6 +1,6 @@
 // ===== РЕНДЕР И ЗАПУСК =====
 function render(){renderConfirm();renderToast();
-document.getElementById("app").innerHTML=calcHTML()+whHTML()+soldHTML()+statsHTML()}
+document.getElementById("app").innerHTML=calcHTML()+estHTML()+whHTML()+soldHTML()+statsHTML()}
 
 // Физическая клавиатура на десктопе для калькулятора
 window.addEventListener("keydown",e=>{

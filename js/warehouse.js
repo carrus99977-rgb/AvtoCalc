@@ -1,17 +1,31 @@
 // ===== WAREHOUSE =====
-function addToWH(){if(!S.carName.trim()){alert("Введите название авто");return}
+// Общее сохранение расчёта из калькулятора: на склад (stock) или в прикидки (estimate).
+// Прикидка — «примерился к машине с аукциона»: лежит отдельной секцией, не считается
+// в «заморожено ₽», в возрасте стока и в статистике, но синхронизируется как обычная машина.
+function saveCalcAs(status){if(!S.carName.trim()){alert("Введите название авто");return}
 if(S.entries.length===0){alert("Добавьте хотя бы одну позицию");return}
 for(const e of S.entries){if(e.currency!=="RUB"&&!(entryRate(e,S.rates)>0)){alert("Проверьте курсы — есть позиции без курса");return}}
 const cleanRates={};Object.keys(S.rates).forEach(k=>{cleanRates[k]=numStr(S.rates[k])}); // храним каноничные курсы (точка)
 S.warehouse.unshift({id:uid(),name:S.carName.trim(),date:new Date().toISOString(),
 rates:cleanRates,eurRate:cleanRates.EUR||"",usdRate:cleanRates.USD||"",
 entries:JSON.parse(JSON.stringify(S.entries)),note:"",updatedAt:new Date().toISOString(),
-status:"stock",sellPrice:"",sellCurrency:"RUB",sellDate:null,sellRates:null,sellEurRate:"",sellUsdRate:"",history:[]});
-addHist(S.warehouse[0],"created",fmt(carCost(S.warehouse[0]))+" ₽");
+status,sellPrice:"",sellCurrency:"RUB",sellDate:null,sellRates:null,sellEurRate:"",sellUsdRate:"",history:[]});
+addHist(S.warehouse[0],"created",fmt(carCost(S.warehouse[0]))+" ₽"+(status==="estimate"?" · прикидка":""));
 saveWH();cloudUpsert(S.warehouse[0]);
 S.carName="";S.entries=[];S.display="0";S.curCat=0;S.showReceipt=false;S.receiptImage=null;S.sellPrice="";S.editingEntry=null;
 S.expandedCar=S.warehouse[0].id;saveDraft();render();
-setTimeout(()=>document.getElementById("wh-section")?.scrollIntoView({behavior:"smooth"}),150)}
+setTimeout(()=>document.getElementById(status==="estimate"?"est-section":"wh-section")?.scrollIntoView({behavior:"smooth"}),150)}
+function addToWH(){saveCalcAs("stock")}
+function addEstimate(){saveCalcAs("estimate")}
+// Прикидка стала реальной покупкой: дата покупки = сегодня (прикидка могла висеть неделями,
+// а возраст стока и «заморожено» должны считаться от покупки; дату можно поправить в ПРАВКЕ)
+function estToStock(id){const car=S.warehouse.find(c=>c.id===id);if(!car||car.status!=="estimate")return;
+const oldDate=car.date;
+car.status="stock";car.date=new Date().toISOString();
+addHist(car,"edited","прикидка → на склад");
+touch(car);saveWH();cloudUpsert(car);render();
+showToast("Машина на складе","Отменить",()=>{const c=S.warehouse.find(x=>x.id===id);if(!c)return;
+c.status="estimate";c.date=oldDate;touch(c);saveWH();cloudUpsert(c);render()})}
 
 function startSell(id){S.sellingCarId=id;S.editingCarId=null;S.sellEditMode=false;S.sellFormPrice="";S.sellFormCurr="RUB";
 S.sellFormRate="";S.sellFormDate=todayStr();render()}
@@ -231,6 +245,13 @@ if(S.warehouse.length)h+=`<input type="text" class="wh-search" placeholder="🔍
 h+=`<div id="wh-list">${stockListHTML()}</div>`;
 return h}
 
+function estHTML(){
+const est=S.warehouse.filter(c=>c.status==="estimate");
+if(!est.length)return ""; // нет прикидок — секцию не показываем вовсе
+let h=`<div class="section-divider est" id="est-section"><span>📝 Прикидки (${est.length})</span></div>`;
+h+=est.map(c=>carCardHTML(c)).join("");
+return h}
+
 function soldHTML(){
 const sld=S.warehouse.filter(c=>c.status==="sold");
 const tp=sld.reduce((s,c)=>s+carProfit(c),0);
@@ -249,7 +270,7 @@ function carCardHTML(car){
 const cost=carCost(car),exp=S.expandedCar===car.id,selling=S.sellingCarId===car.id,editing=S.editingCarId===car.id;
 const sellR=carSellRub(car),pr=sellR-cost;
 let h=`<div class="wh-card"><div class="wh-card-header" onclick="togExp('${esc(car.id)}')">
-<div><div class="wh-car-name">🚗 ${esc(car.name)}<span class="wh-status ${car.status}">${car.status==="stock"?"СКЛАД":"ПРОДАНО"}</span></div>
+<div><div class="wh-car-name">🚗 ${esc(car.name)}<span class="wh-status ${car.status}">${car.status==="stock"?"СКЛАД":car.status==="estimate"?"ПРИКИДКА":"ПРОДАНО"}</span></div>
 <div style="color:#556;font-size:10px;margin-top:2px">${dShort(car.date)}${car.status==="stock"?staleDaysHTML(car):""}</div></div>
 <div style="text-align:right"><div class="wh-car-cost">${fmt(cost)} ₽</div>
 ${car.status==="sold"?`<div style="color:${pr>=0?"#27ae60":"#e74c3c"};font-size:11px;font-weight:600">${pr>=0?"+":""}${fmt(pr)} ₽</div>`:""}</div></div>`;
@@ -340,11 +361,13 @@ ${car.sellDate?`<div class="wh-detail-row"><span class="wh-detail-lbl">📅 Пр
 <span class="wh-detail-val">${dShort(car.sellDate)} · стояла ${daysBetween(car.date,car.sellDate)} дн.</span></div>`:""}`}
 h+=`<div class="wh-actions">`;
 if(car.status==="stock"){h+=`<div class="btn-action btn-green" title="Оформить продажу" onclick="event.stopPropagation();startSell('${esc(car.id)}')">💰 ПРОДАТЬ</div>`}
+if(car.status==="estimate"){h+=`<div class="btn-action btn-green" title="Купил — перевести на склад (дата покупки станет сегодняшней)" onclick="event.stopPropagation();estToStock('${esc(car.id)}')">🏭 НА СКЛАД</div>`}
 h+=`<div class="btn-action btn-blue" title="Название, дата, курсы и суммы" onclick="event.stopPropagation();startCarEdit('${esc(car.id)}')">✏️ ПРАВКА</div>`;
-if(car.status==="stock"){h+=`<div class="btn-action btn-outline" style="flex:0 0 auto;padding:10px 14px" data-tip="В калькулятор" aria-label="Скопировать в калькулятор" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋</div>`}
+if(car.status!=="sold"){h+=`<div class="btn-action btn-outline" style="flex:0 0 auto;padding:10px 14px" data-tip="В калькулятор" aria-label="Скопировать в калькулятор" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋</div>`}
 else{h+=`<div class="btn-action btn-green" title="Изменить цену продажи" onclick="event.stopPropagation();startEditSale('${esc(car.id)}')">💰 ЦЕНА</div>
 <div class="btn-action btn-outline" title="Вернуть на склад" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
-h+=`<div class="btn-action btn-green tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Чек клиенту: цена, БЕЗ себестоимости" aria-label="Чек для клиента" onclick="event.stopPropagation();carClientShare('${esc(car.id)}')">👤</div>
+if(car.status!=="estimate")h+=`<div class="btn-action btn-green tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Чек клиенту: цена, БЕЗ себестоимости" aria-label="Чек для клиента" onclick="event.stopPropagation();carClientShare('${esc(car.id)}')">👤</div>`;
+h+=`
 <div class="btn-action btn-yellow tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Скачать чек себе" aria-label="Скачать чек себе" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">⬇️</div>
 <div class="btn-action btn-blue tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Поделиться чеком" aria-label="Поделиться чеком" onclick="event.stopPropagation();carShare('${esc(car.id)}')">📤</div>
 <div class="btn-action btn-red tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Удалить машину" aria-label="Удалить машину" onclick="event.stopPropagation();delCar('${esc(car.id)}')">🗑</div></div>`;

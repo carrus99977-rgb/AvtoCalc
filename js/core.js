@@ -147,7 +147,7 @@ function normalizeCar(c){
 if(!c||typeof c!=="object")return null;
 const entries=(Array.isArray(c.entries)?c.entries:[]).map(normalizeEntry).filter(Boolean);
 if(!entries.length)return null;
-const status=c.status==="sold"?"sold":"stock";
+const status=c.status==="sold"?"sold":c.status==="estimate"?"estimate":"stock";
 const rates=safeRates(c.rates)||{EUR:numStr(c.eurRate),USD:numStr(c.usdRate)};
 // ВАЖНО: не выбрасываем валютную позицию без курса и не роняем из-за неё машину —
 // normalizeCar гоняется на каждом старте, легаси-машина (старые версии без валидации

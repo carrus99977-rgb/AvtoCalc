@@ -60,10 +60,10 @@ S.cbrInfo="⚠ Не удалось получить курс — проверь 
 
 function renderCbrInfo(){const el=document.getElementById("cbr-info");if(el)el.textContent=S.cbrInfo}
 
-// ===== РЫНОЧНЫЙ КУРС (обменный уровень) =====
-// USD: курс ПРОДАЖИ USDT за рубли (медиана офферов) — серверная функция на Vercel поверх
-// официального BestChange API v2 (HTTPS). EUR рыночной кнопкой НЕ трогаем: чистого рыночного
-// евро-курса в обменниках нет, точный евро берётся через «КУРС ЦБ». Истории нет — курс «сейчас».
+// ===== РЫНОЧНЫЙ КУРС (обмен валюты в банке) =====
+// Курс ПРОДАЖИ Камкомбанка: сколько ₽ стоит 1 $/€ при покупке валюты в банке — по нему
+// перекуп реально платит за машины. Серверная функция на Vercel поверх публичного API
+// банка (backbron.kamkombank.ru). Истории нет — курс «сейчас».
 const MARKET_API="https://avto-calc.vercel.app/api/market";
 let _mkCache=null; // {usd, src, ts} — прогретый рыночный курс
 let _mkInflight=null; // общий in-flight запрос: кнопка и прогрев делят одну загрузку
@@ -73,8 +73,7 @@ if(!_mkInflight)_mkInflight=loadMarketData()
 .finally(()=>{_mkInflight=null});
 return _mkInflight}
 
-// Рыночный курс ПРОДАЖИ доллара и евро (медиана офферов BestChange), отдаёт серверная функция.
-// Источник официальный HTTPS, поэтому проверка ±35% и форекс не нужны. EUR может отсутствовать.
+// Курс продажи доллара и евро Камкомбанка, отдаёт серверная функция. EUR может отсутствовать.
 async function loadMarketData(){
 const r=await fetch(MARKET_API,{signal:AbortSignal.timeout(12000)});
 if(!r.ok)throw new Error("market http "+r.status);
@@ -85,9 +84,9 @@ const v=parseFloat(d&&d.usd);
 // кнопку; без заголовка — часы устройства с допуском 6 ч на сбитое время (легитимная
 // давность CDN-кэша ≤ 40 мин, так что и щедрый порог отсекает по-настоящему тухлое)
 const srv=Date.parse(r.headers.get("date")||"");
-if(!(v>0)||(d.ts&&(srv||Date.now())-d.ts>=(srv?36e5:216e5)))throw new Error("BestChange недоступен");
+if(!(v>0)||(d.ts&&(srv||Date.now())-d.ts>=(srv?36e5:216e5)))throw new Error("банк недоступен");
 const e=parseFloat(d&&d.eur);
-return{usd:v,eur:e>0?e:0,src:d.src||"BestChange продажа"}}
+return{usd:v,eur:e>0?e:0,src:d.src||"Камкомбанк (продажа)"}}
 
 function applyMarket(d){
 S.rates.USD=String(Math.round(d.usd*1e4)/1e4);
@@ -95,7 +94,7 @@ if(d.eur>0)S.rates.EUR=String(Math.round(d.eur*1e4)/1e4); // евро тоже �
 S.cbrDate=""; // рыночный курс — только текущий момент
 const t=new Date(d.ts||Date.now()).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
 const eurTxt=d.eur>0?` · € ${fmtRate(d.eur)}`:"";
-S.cbrInfo=`✓ Рынок (продажа) ${t} · $ ${fmtRate(d.usd)}${eurTxt} ₽`;
+S.cbrInfo=`✓ ${d.src||"Камкомбанк (продажа)"} ${t} · $ ${fmtRate(d.usd)}${eurTxt} ₽`;
 saveDraft();render()}
 
 async function fetchMarket(){
@@ -107,7 +106,7 @@ try{
 const d=await loadMarketShared();
 S.cbrBusy=false;applyMarket(d)}
 catch(e){S.cbrBusy=false;
-S.cbrInfo="⚠ Наличный курс (BestChange) недоступен — попробуй ещё раз, жми «КУРС ЦБ» или введи вручную";renderCbrInfo()}}
+S.cbrInfo="⚠ Курс банка недоступен — попробуй ещё раз, жми «КУРС ЦБ» или введи вручную";renderCbrInfo()}}
 
 // ===== ТИХИЙ ПРОГРЕВ ПРИ ЗАПУСКЕ =====
 // К моменту нажатия кнопок ответы уже готовы: кнопки срабатывают мгновенно,

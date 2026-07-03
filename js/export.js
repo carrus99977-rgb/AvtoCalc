@@ -24,7 +24,7 @@ rows.push([]);
 rows.push(["ДЕТАЛИЗАЦИЯ РАСХОДОВ"]);
 rows.push(["Машина","Статус","Категория","Валюта","Сумма","Курс ₽","Сумма ₽"]);
 S.warehouse.forEach(car=>{
-const cr=carRates(car),st=car.status==="sold"?"Продано":"Склад";
+const cr=carRates(car),st=car.status==="sold"?"Продано":car.status==="estimate"?"Прикидка":"Склад";
 car.entries.forEach(e=>{const r=entryRate(e,cr);
 rows.push([car.name,st,e.label,e.currency,csvNum(e.amount),
 e.currency==="RUB"?"":(r?csvNum(r):"⚠ нет курса"),

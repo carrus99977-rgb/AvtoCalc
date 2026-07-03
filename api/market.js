@@ -1,33 +1,30 @@
-// Vercel serverless: рыночный курс ПРОДАЖИ доллара и евро за рубли (сколько ₽ дают за 1 $/€).
-// Источник: официальный BestChange API v2 (HTTPS, JSON). Ключ — в переменной окружения
-// BESTCHANGE_KEY (в репозиторий не коммитим, он публичный).
-// Все направления → СБП ₽ (21). В этом направлении rate = валюта за 1 ₽, поэтому
-// ₽ за 1 единицу = 1/rate. Курс = медиана офферов (типичный). USD — ликвидный USDT (одно
-// направление); EUR раздроблён по способам — объединяем офферы нескольких в одну медиану.
-const USD_PAIR = "10-21"; // USDT TRC20 → СБП RUB
-// EUR-способы → СБП: SEPA, банк.карта, банк.счёт, Volet, Capitalist, Revolut, Wise, Skrill
-const EUR_PAIRS = ["171-21", "65-21", "70-21", "120-21", "226-21", "193-21", "242-21", "123-21"];
-const ALL_PAIRS = [USD_PAIR, ...EUR_PAIRS].join("+");
+// Vercel serverless: курс обмена Камкомбанка — наличные доллар и евро в отделениях банка.
+// Источник: backbron.kamkombank.ru (сервис брони валюты самого банка) — публичный JSON без ключа.
+// sell = банк ПРОДАЁТ валюту клиенту: по этому курсу перекуп покупает $/€ для оплаты машин.
+// Контракт ответа прежний: {usd, eur?, src, ts} — клиент (js/cbr.js) не меняется.
+const KKB_URL = "https://backbron.kamkombank.ru/v1/currency/exchange";
 
-function median(xs) { xs.sort((a, b) => a - b); return xs.length ? xs[Math.floor(xs.length / 2)] : 0; }
-// собрать ₽-за-единицу из офферов направления (rate = валюта за ₽ → ₽/единица = 1/rate), фильтр мусора
-function ppuFrom(arr, lo, hi) {
-  const out = [];
-  for (const o of arr || []) {
-    const rate = parseFloat(o && o.rate);
-    if (!(rate > 0)) continue;
-    const v = 1 / rate;
-    if (v > lo && v < hi) out.push(v);
+// первый валидный курс «продажа» по имени валюты из списка отделений
+// (курсы во всех отделениях одинаковые; границы lo/hi — страховка от смены
+// формата/семантики ответа на стороне банка, а не фильтр «мусорных» офферов)
+function pickSell(result, name, lo, hi) {
+  for (const office of result || []) {
+    for (const c of (office && office.currencies) || []) {
+      if (c && typeof c === "object" && c.currency_name === name) {
+        const v = parseFloat(String(c.sell).replace(",", "."));
+        if (v > lo && v < hi) return v;
+      }
+    }
   }
-  return out;
+  return 0;
 }
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*"); // курс публичный — работает и с GitHub Pages
   if (req.method !== "GET") { res.setHeader("Allow", "GET"); res.status(405).end(); return; }
   // Легитимный клиент дёргает чистый /api/market без параметров. Любой query (?cb=…) —
-  // это обход CDN-кэша: отклоняем СРАЗУ (не тратим приватный ключ и лимит BestChange).
-  // Ответ кэшируем надолго, чтобы спам одинаковых «мусорных» URL тоже гасил CDN.
+  // это обход CDN-кэша: отклоняем СРАЗУ. Ответ кэшируем надолго, чтобы спам одинаковых
+  // «мусорных» URL тоже гасил CDN.
   const qs = (req.url || "").indexOf("?");
   if (qs !== -1 && req.url.length > qs + 1) {
     res.setHeader("Cache-Control", "s-maxage=3600");
@@ -35,31 +32,23 @@ module.exports = async (req, res) => {
     return;
   }
   try {
-    const key = process.env.BESTCHANGE_KEY;
-    if (!key) throw new Error("BESTCHANGE_KEY not set");
-    const r = await fetch(`https://bestchange.app/v2/${key}/rates/${ALL_PAIRS}`, {
+    const r = await fetch(KKB_URL, {
       signal: AbortSignal.timeout(12000),
       headers: { "User-Agent": "AvtoCalc/1.0 (+https://avto-calc.vercel.app)" },
     });
-    if (!r.ok) throw new Error("bestchange v2 http " + r.status);
+    if (!r.ok) throw new Error("kamkombank http " + r.status);
     const data = await r.json();
-    const rates = (data && data.rates) || {};
-    // USD — одно ликвидное направление (USDT→СБП)
-    const usdPpu = ppuFrom(rates[USD_PAIR], 50, 250);
-    if (!usdPpu.length) throw new Error("no usd offers");
-    const usd = median(usdPpu);
-    // EUR — объединяем офферы всех способов в одну медиану (может отсутствовать — не критично)
-    let eurAll = [];
-    for (const p of EUR_PAIRS) eurAll = eurAll.concat(ppuFrom(rates[p], 50, 300));
-    const eur = median(eurAll);
+    const result = (data && data.result) || [];
+    const usd = pickSell(result, "Доллар США", 20, 1000);
+    const eur = pickSell(result, "Евро", 20, 1000);
+    if (!usd) throw new Error("no usd rate");
     res.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=1800");
     const out = {
       usd: Math.round(usd * 10000) / 10000,
-      offers: usdPpu.length,
-      src: "BestChange: продажа",
+      src: "Камкомбанк (продажа)",
       ts: Date.now(),
     };
-    if (eur > 0) { out.eur = Math.round(eur * 10000) / 10000; out.eurOffers = eurAll.length; }
+    if (eur) out.eur = Math.round(eur * 10000) / 10000;
     res.status(200).json(out);
   } catch (e) {
     res.setHeader("Cache-Control", "s-maxage=30"); // ошибку кэшируем кратко

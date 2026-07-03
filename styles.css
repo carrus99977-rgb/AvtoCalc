@@ -117,6 +117,7 @@ background:var(--card);color:var(--t4);border:1px solid var(--br);letter-spacing
 font-size:16px;font-weight:700;color:var(--gold);letter-spacing:3px;text-transform:uppercase}
 .section-divider.sold span{color:#e74c3c}
 .section-divider.stats span{color:#3498db}
+.section-divider.est span{color:#3498db}
 .stats-bar{display:flex;gap:8px;margin-bottom:14px}
 .stat-card{flex:1;background:var(--card);border-radius:10px;padding:10px 8px;text-align:center;border:1px solid var(--br)}
 .stat-num{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:1px}
@@ -134,6 +135,7 @@ letter-spacing:1px;background:var(--card);color:var(--t4);border:1px solid var(-
 .wh-status{display:inline-block;padding:2px 8px;border-radius:6px;font-size:9px;font-weight:700;letter-spacing:1px;margin-left:8px}
 .wh-status.stock{background:#1a3a2a;color:#27ae60;border:1px solid #27ae60}
 .wh-status.sold{background:#3a1a1a;color:#e74c3c;border:1px solid #e74c3c}
+.wh-status.estimate{background:#1a2a3a;color:#3498db;border:1px solid #3498db}
 .wh-detail{padding:0 16px 14px;animation:fadeIn .2s ease}
 .wh-detail-row{display:flex;justify-content:space-between;padding:4px 0;font-size:11px}
 .wh-detail-row+.wh-detail-row{border-top:1px solid var(--line2)}
