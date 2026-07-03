@@ -363,14 +363,14 @@ h+=`<div class="wh-actions">`;
 if(car.status==="stock"){h+=`<div class="btn-action btn-green" title="Оформить продажу" onclick="event.stopPropagation();startSell('${esc(car.id)}')">💰 ПРОДАТЬ</div>`}
 if(car.status==="estimate"){h+=`<div class="btn-action btn-green" title="Купил — перевести на склад (дата покупки станет сегодняшней)" onclick="event.stopPropagation();estToStock('${esc(car.id)}')">🏭 НА СКЛАД</div>`}
 h+=`<div class="btn-action btn-blue" title="Название, дата, курсы и суммы" onclick="event.stopPropagation();startCarEdit('${esc(car.id)}')">✏️ ПРАВКА</div>`;
-if(car.status!=="sold"){h+=`<div class="btn-action btn-outline" style="flex:0 0 auto;padding:10px 14px" data-tip="В калькулятор" aria-label="Скопировать в калькулятор" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋</div>`}
-else{h+=`<div class="btn-action btn-green" title="Изменить цену продажи" onclick="event.stopPropagation();startEditSale('${esc(car.id)}')">💰 ЦЕНА</div>
+if(car.status!=="sold"){h+=`<div class="btn-action btn-outline" title="Скопировать расчёт в калькулятор" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋 В КАЛЬКУЛЯТОР</div>`}
+else{h+=`<div class="btn-action btn-green" title="Изменить цену или дату продажи" onclick="event.stopPropagation();startEditSale('${esc(car.id)}')">💰 ЦЕНА</div>
 <div class="btn-action btn-outline" title="Вернуть на склад" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
-if(car.status!=="estimate")h+=`<div class="btn-action btn-green tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Чек клиенту: цена, БЕЗ себестоимости" aria-label="Чек для клиента" onclick="event.stopPropagation();carClientShare('${esc(car.id)}')">👤</div>`;
+if(car.status!=="estimate")h+=`<div class="btn-action btn-green" title="Чек с ценой для клиента — БЕЗ себестоимости" onclick="event.stopPropagation();carClientShare('${esc(car.id)}')">👤 ЧЕК КЛИЕНТУ</div>`;
 h+=`
-<div class="btn-action btn-yellow tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Скачать чек себе" aria-label="Скачать чек себе" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">⬇️</div>
-<div class="btn-action btn-blue tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Поделиться чеком" aria-label="Поделиться чеком" onclick="event.stopPropagation();carShare('${esc(car.id)}')">📤</div>
-<div class="btn-action btn-red tip-end" style="flex:0 0 auto;padding:10px 14px" data-tip="Удалить машину" aria-label="Удалить машину" onclick="event.stopPropagation();delCar('${esc(car.id)}')">🗑</div></div>`;
+<div class="btn-action btn-yellow" title="Скачать внутренний чек (с себестоимостью)" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">⬇️ ЧЕК СЕБЕ</div>
+<div class="btn-action btn-blue" title="Поделиться внутренним чеком (с себестоимостью)" onclick="event.stopPropagation();carShare('${esc(car.id)}')">📤 ПОДЕЛИТЬСЯ</div>
+<div class="btn-action btn-red" style="flex:0 1 32%" title="Удалить машину" onclick="event.stopPropagation();delCar('${esc(car.id)}')">🗑 УДАЛИТЬ</div></div>`;
 if(S.carReceipts[car.id])h+=`<div class="saved-preview"><p>✅ ЧЕК СОХРАНЁН — ЗАЖМИТЕ ДЛЯ КОПИРОВАНИЯ</p><img src="${S.carReceipts[car.id]}" alt="Чек"></div>`;
 const hist=carHistory(car);
 h+=`<div class="wh-hist"><div class="wh-hist-head" onclick="event.stopPropagation();togHist()">

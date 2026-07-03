@@ -141,7 +141,7 @@ letter-spacing:1px;background:var(--card);color:var(--t4);border:1px solid var(-
 .wh-detail-row+.wh-detail-row{border-top:1px solid var(--line2)}
 .wh-detail-lbl{color:var(--t4)}.wh-detail-val{color:var(--t1);font-weight:600}
 .wh-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
-.wh-actions .btn-action{flex:1;margin-bottom:0;font-size:11px;padding:10px 0;letter-spacing:1px}
+.wh-actions .btn-action{flex:1 1 30%;margin-bottom:0;font-size:11px;padding:10px 4px;letter-spacing:1px}
 .wh-sell-form{padding:12px 16px;border-top:1px solid var(--br);animation:fadeIn .2s ease}
 .wh-sell-input{width:100%;padding:10px 12px;background:var(--input);border:1px solid var(--br2);border-radius:8px;font-size:16px;color:var(--t0);font-family:'JetBrains Mono',monospace;outline:none;margin-bottom:8px}
 .wh-sell-input:focus{border-color:var(--gold)}
