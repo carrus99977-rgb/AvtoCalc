@@ -11,11 +11,11 @@ function exportCSV(){
 if(!S.warehouse.length){alert("Склад пуст — нечего экспортировать");return}
 const rows=[];
 rows.push(["СВОДКА ПО МАШИНАМ"]);
-rows.push(["Название","Дата добавления","Статус","Себестоимость ₽","Дата продажи","Цена продажи ₽","Прибыль ₽","Наценка %","Маржа %","Дней на складе"]);
+rows.push(["Название","VIN","Дата добавления","Статус","Себестоимость ₽","Дата продажи","Цена продажи ₽","Прибыль ₽","Наценка %","Маржа %","Дней на складе"]);
 S.warehouse.forEach(car=>{
 const cost=carCost(car),sold=car.status==="sold";
 const sellR=sold?carSellRub(car):0,pr=sellR-cost;
-rows.push([car.name,dShort(car.date),sold?"Продано":"Склад",csvNum(cost),
+rows.push([car.name,(car.info&&car.info.vin)||"",dShort(car.date),sold?"Продано":car.status==="estimate"?"Прикидка":"Склад",csvNum(cost),
 sold&&car.sellDate?dShort(car.sellDate):"",
 sold?csvNum(sellR):"",sold?csvNum(pr):"",
 sold&&cost>0?csvNum(pr/cost*100):"",sold&&sellR>0?csvNum(pr/sellR*100):"",

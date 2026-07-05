@@ -9,10 +9,12 @@ const cleanRates={};Object.keys(S.rates).forEach(k=>{cleanRates[k]=numStr(S.rate
 S.warehouse.unshift({id:uid(),name:S.carName.trim(),date:new Date().toISOString(),
 rates:cleanRates,eurRate:cleanRates.EUR||"",usdRate:cleanRates.USD||"",
 entries:JSON.parse(JSON.stringify(S.entries)),note:"",updatedAt:new Date().toISOString(),
+info:normCarInfo(S.carInfo),
 status,sellPrice:"",sellCurrency:"RUB",sellDate:null,sellRates:null,sellEurRate:"",sellUsdRate:"",history:[]});
 addHist(S.warehouse[0],"created",fmt(carCost(S.warehouse[0]))+" ₽"+(status==="estimate"?" · прикидка":""));
 saveWH();cloudUpsert(S.warehouse[0]);
 S.carName="";S.entries=[];S.display="0";S.curCat=0;S.showReceipt=false;S.receiptImage=null;S.sellPrice="";S.editingEntry=null;
+S.carInfo=normCarInfo(null);
 S.expandedCar=S.warehouse[0].id;saveDraft();render();
 setTimeout(()=>document.getElementById(status==="estimate"?"est-section":"wh-section")?.scrollIntoView({behavior:"smooth"}),150)}
 function addToWH(){saveCalcAs("stock")}
@@ -92,6 +94,7 @@ function togHist(){S.histOpen=!S.histOpen;render()}
 function cpToCalc(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 const doCopy=()=>{
 S.carName=car.name;
+S.carInfo=normCarInfo(car.info); // данные авто (VIN, цвета, год) едут вместе с расчётом
 const cr=carRates(car);Object.keys(cr).forEach(c=>{if(cr[c])S.rates[c]=cr[c]});
 car.entries.forEach(e=>{if(e.currency!=="RUB"&&CUR[e.currency]&&!S.activeCur.includes(e.currency))S.activeCur.push(e.currency)});
 S.activeCur=Object.keys(CUR).filter(k=>S.activeCur.includes(k));
@@ -110,6 +113,7 @@ function carDateInput(car){return isoToDateInput(car.date)}
 function startCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 S.editingCarId=id;S.sellingCarId=null;S.sellEditMode=false;S.expandedCar=id;
 S.editName=car.name;S.editDate=carDateInput(car);S.editAskPrice=car.askPrice||"";S.editNote=car.note||"";
+S.editInfo=normCarInfo(car.info);
 const cr=carRates(car);
 S.editCarEntries=car.entries.map(e=>({...e,
 rate:e.rate||(e.currency==="RUB"?"":(cr[e.currency]||""))}));
@@ -123,12 +127,13 @@ for(const e of S.editCarEntries){if(!(parseNum(e.amount)>0)){alert("Провер
 if(e.currency!=="RUB"&&!(parseNum(e.rate)>0)){alert("Проверьте курсы — есть пустые");return}}
 const oldCost=carCost(car); // себестоимость до правки — для истории
 // сигнатура значимых полей (дата — на уровне дня): событие пишем, только если реально что-то изменилось
-const sig=c=>JSON.stringify({n:c.name||"",no:c.note||"",a:c.askPrice||"",d:carDateInput(c),e:c.entries});
+const sig=c=>JSON.stringify({n:c.name||"",no:c.note||"",a:c.askPrice||"",d:carDateInput(c),e:c.entries,i:c.info||null});
 const before=sig(car);
 car.entries=S.editCarEntries.map(e=>{const{_new,...rest}=e;
 return{...rest,amount:parseNum(e.amount),rate:e.currency==="RUB"?"":numStr(e.rate)}});
 car.name=S.editName.trim();
 car.note=String(S.editNote||"").trim().slice(0,500);
+car.info=normCarInfo(S.editInfo);
 const ap=parseNum(S.editAskPrice);car.askPrice=ap>0?String(ap):"";
 // пустую/битую дату не трогаем; иначе фиксируем полдень выбранного дня (без сдвига пояса)
 if(/^\d{4}-\d{2}-\d{2}$/.test(S.editDate||"")){const d=new Date(S.editDate+"T12:00:00");if(!isNaN(d))car.date=d.toISOString()}
@@ -292,8 +297,26 @@ h+=`<div class="wh-detail" onclick="event.stopPropagation()">
 <div class="edit-field"><label class="edit-lbl">ЦЕНА ДЛЯ КЛИЕНТА ₽ (для списка машин, не себестоимость)</label>
 <input type="text" inputmode="decimal" maxlength="16" class="edit-input" placeholder="не указана" value="${esc(S.editAskPrice)}" oninput="S.editAskPrice=this.value"></div></div>
 <div class="edit-fields" style="margin-bottom:10px">
-<div class="edit-field"><label class="edit-lbl">ЗАМЕТКА (VIN, комплектация, контакты)</label>
+<div class="edit-field"><label class="edit-lbl">ЗАМЕТКА (контакты, детали — только для себя)</label>
 <textarea class="edit-input edit-area" rows="2" maxlength="500" placeholder="пусто" oninput="S.editNote=this.value">${esc(S.editNote)}</textarea></div></div>
+<div style="color:#667;font-size:9px;margin-bottom:6px;letter-spacing:.5px">ДАННЫЕ АВТО — попадают в чек клиенту (кроме VIN, он внутренний):</div>
+<div class="edit-fields" style="align-items:flex-end;margin-bottom:8px">
+<div class="edit-field" style="flex:2"><label class="edit-lbl">VIN (внутренний)</label>
+<input type="text" maxlength="20" class="edit-input" placeholder="WBA..." value="${esc(S.editInfo.vin)}" oninput="S.editInfo.vin=this.value"></div>
+<div class="bulk-apply" onclick="vinFillEdit()">🔎 ПО VIN</div></div>
+<div class="edit-fields" style="margin-bottom:8px">
+<div class="edit-field"><label class="edit-lbl">ГОД ВЫПУСКА</label>
+<input type="text" inputmode="numeric" maxlength="4" class="edit-input" placeholder="2023" value="${esc(S.editInfo.year)}" oninput="S.editInfo.year=this.value"></div>
+<div class="edit-field"><label class="edit-lbl">ОБЪЁМ, Л</label>
+<input type="text" inputmode="decimal" maxlength="10" class="edit-input" placeholder="3.5" value="${esc(S.editInfo.vol)}" oninput="S.editInfo.vol=this.value"></div></div>
+<div class="edit-fields" style="margin-bottom:8px">
+<div class="edit-field"><label class="edit-lbl">ЦВЕТ КУЗОВА</label>
+<input type="text" maxlength="40" class="edit-input" placeholder="белый" value="${esc(S.editInfo.body)}" oninput="S.editInfo.body=this.value"></div>
+<div class="edit-field"><label class="edit-lbl">ЦВЕТ САЛОНА</label>
+<input type="text" maxlength="40" class="edit-input" placeholder="бежевый" value="${esc(S.editInfo.inter)}" oninput="S.editInfo.inter=this.value"></div></div>
+<div class="edit-fields" style="margin-bottom:10px">
+<div class="edit-field"><label class="edit-lbl">КОМПЛЕКТАЦИЯ (видит клиент)</label>
+<input type="text" maxlength="80" class="edit-input" placeholder="Premium, панорама" value="${esc(S.editInfo.trim)}" oninput="S.editInfo.trim=this.value"></div></div>
 <div style="color:#667;font-size:9px;margin-bottom:6px;letter-spacing:.5px">КУРСЫ ПО ФАКТУ ОПЛАТЫ:</div>`;
 if(bulkCurs.length){
 h+=`<div style="color:#667;font-size:9px;margin-bottom:6px;letter-spacing:.5px">БЫСТРО ПРИМЕНИТЬ КУРС КО ВСЕМ ПОЗИЦИЯМ:</div>`;
@@ -353,6 +376,11 @@ if(mk)h+=`<div class="wh-detail-row"><span class="wh-detail-lbl">💱 В вал�
 if(car.status==="stock"&&parseNum(car.askPrice)>0)h+=`<div class="wh-detail-row">
 <span class="wh-detail-lbl">💰 Цена для клиента</span>
 <span class="wh-detail-val">${fmt(parseNum(car.askPrice))} ₽</span></div>`;
+const specs=carSpecsStr(car.info);
+if(specs||(car.info&&car.info.trim))h+=`<div class="wh-detail-row"><span class="wh-detail-lbl">🔧 Авто</span>
+<span class="wh-detail-val">${esc(specs)}${car.info.trim?(specs?" · ":"")+esc(car.info.trim):""}</span></div>`;
+if(car.info&&car.info.vin)h+=`<div class="wh-detail-row"><span class="wh-detail-lbl"># VIN (внутренний)</span>
+<span class="wh-detail-val">${esc(car.info.vin)}</span></div>`;
 if(car.note)h+=`<div class="wh-note">📝 ${esc(car.note)}</div>`;
 if(car.status==="sold"){const mg=cost>0?(pr/cost)*100:0,ip=pr>=0;
 const sCur=curInfo(car.sellCurrency);

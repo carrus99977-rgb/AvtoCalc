@@ -31,8 +31,18 @@ function rDisp(){const el=document.getElementById("calc-display");if(!el)return 
 const l=S.display.length;el.style.fontSize=(l>12?24:l>8?30:36)+"px";el.textContent=fmt(parseNum(S.display||"0")||0)}
 function rProfit(){const t=totR(S.entries,S.rates);
 const el=document.getElementById("pr-results");if(el)el.innerHTML=prHTML(pCalc(t))}
-function pCalc(cost){const sell=toR(parseNum(S.sellPrice)||0,S.sellCurrency,S.rates);const pr=sell-cost;
-return{cost,sell,profit:pr,markup:cost>0?(pr/cost)*100:0,margin:sell>0?(pr/sell)*100:0}}
+// живое обновление открытого HTML-чека (меняешь цену/наценку — чек пересчитывается сразу)
+function rReceipt(){const el=document.getElementById("receipt-section");
+if(el&&S.showReceipt&&S.entries.length)el.outerHTML=receiptHTML()}
+// Эффективная цена продажи: введённая вручную главнее; если поле пусто, но задана целевая
+// наценка % — расчётная цена от себестоимости (byMarkup). Ввёл % — прибыль и чек
+// пересчитываются СРАЗУ, без кнопки «→ В ПРОДАЖУ»; убрал % — вернулись к «—».
+// Кнопка «→ В ПРОДАЖУ» по-прежнему фиксирует расчётную цену в поле (для сохранения в продажу).
+function pCalc(cost){
+let sell=toR(parseNum(S.sellPrice)||0,S.sellCurrency,S.rates),byMarkup=false;
+if(!(sell>0)){const p=tgtPct();if(p!=null&&cost>0){sell=cost*(1+p/100);byMarkup=true}}
+const pr=sell-cost;
+return{cost,sell,profit:pr,markup:cost>0?(pr/cost)*100:0,margin:sell>0?(pr/sell)*100:0,byMarkup}}
 
 // ===== ОБРАТНЫЙ КАЛЬКУЛЯТОР: цена продажи под целевую наценку =====
 function tgtPct(){const p=parseNum(S.targetMarkup);return isFinite(p)&&p>-100?p:null}
@@ -68,15 +78,16 @@ S.cbrDate="";S.cbrInfo="";saveDraft();render()}
 // текущий день, не про машину; для них свой ✕). С подтверждением и отменой, как delCar.
 function clearCalc(){
 const snap={carName:S.carName,entries:S.entries,display:S.display,curCat:S.curCat,
-sellPrice:S.sellPrice,targetMarkup:S.targetMarkup,sellCurrency:S.sellCurrency};
-showConfirm("Очистить расчёт? Название, позиции и цена продажи будут стёрты (курсы останутся).",()=>{
+sellPrice:S.sellPrice,targetMarkup:S.targetMarkup,sellCurrency:S.sellCurrency,carInfo:{...S.carInfo}};
+showConfirm("Очистить расчёт? Название, данные авто, позиции и цена продажи будут стёрты (курсы останутся).",()=>{
 S.carName="";S.entries=[];S.display="0";S.curCat=0;
-S.sellPrice="";S.targetMarkup="";S.sellCurrency="RUB";
+S.sellPrice="";S.targetMarkup="";S.sellCurrency="RUB";S.carInfo=normCarInfo(null);
 S.showReceipt=false;S.receiptImage=null;S.editingEntry=null;
 saveDraft();render();
 showToast("Расчёт очищен","Отменить",()=>{
 S.carName=snap.carName;S.entries=snap.entries;S.display=snap.display;S.curCat=snap.curCat;
 S.sellPrice=snap.sellPrice;S.targetMarkup=snap.targetMarkup;S.sellCurrency=snap.sellCurrency;
+S.carInfo=snap.carInfo;
 saveDraft();render()})})}
 
 // Включение/выключение валюты в настройках
@@ -92,7 +103,7 @@ bw=!hs?0:Math.min(Math.abs(pd.markup),100),bc=!hs?"#333":ip?"#27ae60":"#e74c3c";
 const mk=pd.cost>0?marketRates():null; // справочный эквивалент по рыночному курсу банка
 return`<div class="pr-row"><span class="pr-lbl">Себестоимость</span><span class="pr-val ntl">${fmt(pd.cost)} ₽</span></div>
 ${mk?`<div style="text-align:right;color:#556;font-size:9px;margin-top:-4px">≈ ${fmt(pd.cost/mk.usd)} $${mk.eur?` · ${fmt(pd.cost/mk.eur)} €`:""} по рынку</div>`:""}
-<div class="pr-row"><span class="pr-lbl">Цена продажи</span><span class="pr-val ${c}">${hs?fmt(pd.sell)+" ₽":"—"}</span></div>
+<div class="pr-row"><span class="pr-lbl">${pd.byMarkup?"Цена по наценке "+esc(S.targetMarkup)+"%":"Цена продажи"}</span><span class="pr-val ${c}">${hs?fmt(pd.sell)+" ₽":"—"}</span></div>
 <div class="pr-row"><span class="pr-lbl">Прибыль</span><span class="pr-val ${c}">${hs?(ip?"+":"")+fmt(pd.profit)+" ₽":"—"}</span></div>
 <div class="pr-row"><span class="pr-lbl">Наценка</span><span class="pr-val ${c}">${hs?(ip?"+":"")+fmtD(pd.markup,1)+"%":"—"}</span></div>
 <div class="pr-row"><span class="pr-lbl">Маржа</span><span class="pr-val ${c}">${hs?(ip?"+":"")+fmtD(pd.margin,1)+"%":"—"}</span></div>
@@ -111,6 +122,28 @@ let h=`<div class="header"><h1>🚗 Авто Калькулятор</h1><p>Ра�
 <div class="jump-chip" onclick="document.getElementById('stats-section')?.scrollIntoView({behavior:'smooth'})">📈 Статистика</div></div>
 <input type="text" class="car-name-input" placeholder="Название авто (напр. BMW X5 2023)" value="${esc(S.carName)}"
 oninput="S.carName=this.value;saveDraft()">
+<div class="coll-box"><div class="coll-header" onclick="S.showCarInfo=!S.showCarInfo;render()">
+<span>🚗 Данные авто${carSpecsStr(S.carInfo)||S.carInfo.vin||S.carInfo.trim?" ✓":""}</span><span class="coll-arrow" style="transform:rotate(${S.showCarInfo?180:0}deg)">▾</span></div>
+${S.showCarInfo?`<div class="coll-body">
+<div class="edit-fields" style="align-items:flex-end;margin-bottom:8px">
+<div class="edit-field" style="flex:2"><label class="edit-lbl">VIN — ВНУТРЕННИЙ, В ЧЕК КЛИЕНТУ НЕ ПОПАДАЕТ</label>
+<input type="text" maxlength="20" class="edit-input" placeholder="WBA..." value="${esc(S.carInfo.vin)}" oninput="S.carInfo.vin=this.value;saveDraft()"></div>
+<div class="bulk-apply" onclick="vinFillCalc()">🔎 ПО VIN</div></div>
+<div class="edit-fields" style="margin-bottom:8px">
+<div class="edit-field"><label class="edit-lbl">ГОД ВЫПУСКА</label>
+<input type="text" inputmode="numeric" maxlength="4" class="edit-input" placeholder="2023" value="${esc(S.carInfo.year)}" oninput="S.carInfo.year=this.value;saveDraft()"></div>
+<div class="edit-field"><label class="edit-lbl">ОБЪЁМ ДВИГАТЕЛЯ, Л</label>
+<input type="text" inputmode="decimal" maxlength="10" class="edit-input" placeholder="3.5" value="${esc(S.carInfo.vol)}" oninput="S.carInfo.vol=this.value;saveDraft()"></div></div>
+<div class="edit-fields" style="margin-bottom:8px">
+<div class="edit-field"><label class="edit-lbl">ЦВЕТ КУЗОВА</label>
+<input type="text" maxlength="40" class="edit-input" placeholder="белый" value="${esc(S.carInfo.body)}" oninput="S.carInfo.body=this.value;saveDraft()"></div>
+<div class="edit-field"><label class="edit-lbl">ЦВЕТ САЛОНА</label>
+<input type="text" maxlength="40" class="edit-input" placeholder="бежевый" value="${esc(S.carInfo.inter)}" oninput="S.carInfo.inter=this.value;saveDraft()"></div></div>
+<div class="edit-fields">
+<div class="edit-field"><label class="edit-lbl">КОМПЛЕКТАЦИЯ (видит клиент)</label>
+<input type="text" maxlength="80" class="edit-input" placeholder="Premium, панорама, HUD" value="${esc(S.carInfo.trim)}" oninput="S.carInfo.trim=this.value;saveDraft()"></div></div>
+<div class="rate-hint">Эти данные попадут в чек для клиента (кроме VIN — он только для внутренних задач). «🔎 ПО VIN» заполняет пустые поля из базы NHTSA; заполненное вручную не трогает.</div>
+</div>`:""}</div>
 <div class="coll-box"><div class="coll-header" onclick="S.showSettings=!S.showSettings;render()">
 <span>⚙️ Текущие курсы валют</span><span class="coll-arrow" style="transform:rotate(${S.showSettings?180:0}deg)">▾</span></div>
 ${S.showSettings?`<div class="coll-body">
@@ -179,12 +212,12 @@ h+=`<div class="profit-box"><div class="coll-header" onclick="S.showProfit=!S.sh
 <span>📊 Расчёт прибыли</span><span class="coll-arrow" style="transform:rotate(${S.showProfit?180:0}deg)">▾</span></div>
 ${S.showProfit?`<div class="profit-body">
 <div class="profit-input-group"><label>💰 Продажа</label>
-<input type="text" inputmode="decimal" maxlength="16" class="profit-input" placeholder="0" value="${esc(S.sellPrice)}" oninput="S.sellPrice=this.value;saveDraft();rProfit()"></div>
+<input type="text" inputmode="decimal" maxlength="16" class="profit-input" placeholder="0" value="${esc(S.sellPrice)}" oninput="S.sellPrice=this.value;saveDraft();rProfit();rReceipt()"></div>
 <div class="profit-curr-row">
 ${[...new Set(["RUB",...S.activeCur,S.sellCurrency])].map(c=>`<div class="pcb ${S.sellCurrency===c?"a-"+curInfo(c).cls:""}" onclick="S.sellCurrency='${esc(c)}';saveDraft();render()">${curInfo(c).symbol} ${esc(c)}</div>`).join("")}</div>
 <div class="target-row">
 <label class="target-lbl">🎯 Наценка</label>
-<input type="text" inputmode="decimal" maxlength="8" class="profit-input target-inp" placeholder="%" value="${esc(S.targetMarkup)}" oninput="S.targetMarkup=this.value;saveDraft();rTarget()">
+<input type="text" inputmode="decimal" maxlength="8" class="profit-input target-inp" placeholder="%" value="${esc(S.targetMarkup)}" oninput="S.targetMarkup=this.value;saveDraft();rTarget();rProfit();rReceipt()">
 <div class="target-out" id="tgt-out">${targetHTML(t)}</div>
 <div class="bulk-apply" onclick="applyTarget()">→ В ПРОДАЖУ</div></div>
 <div class="pr-box" id="pr-results">${prHTML(pCalc(t))}</div></div>`:""}</div>`}

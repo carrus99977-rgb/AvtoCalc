@@ -1,6 +1,6 @@
 // АвтоКальк — service worker: приложение работает без интернета.
 // V — версия релиза: при каждом обновлении меняется здесь и в ?v=N в index.html.
-const V = "50";
+const V = "51";
 const CACHE = "avtokalk-v" + V;
 const FILES = [
   "./",
@@ -17,6 +17,7 @@ const FILES = [
     "js/cloud.js",
     "js/calc.js",
     "js/warehouse.js",
+    "js/vin.js",
     "js/charts.js",
     "js/stats.js",
     "js/receipt.js",

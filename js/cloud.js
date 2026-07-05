@@ -107,6 +107,7 @@ askWipe()}                                              // офлайн / не �
 function clearLocalData(){
 S.warehouse=[];CL.queue=[];S.carReceipts={};
 S.carName="";S.entries=[];S.display="0";S.curCat=0;S.sellPrice="";S.targetMarkup="";S.sellCurrency="RUB";
+S.carInfo=normCarInfo(null);
 S.rates={...DEFAULT_RATES};S.activeCur=[...DEFAULT_ACTIVE];
 try{localStorage.removeItem("autoCalc_queue");localStorage.removeItem("autoCalc_draft")}catch(e){}
 saveWH()}

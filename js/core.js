@@ -15,11 +15,12 @@ const DEFAULT_RATES={EUR:"83",USD:"72"};
 const DEFAULT_ACTIVE=["EUR","USD"];
 
 let S={carName:"",rates:{...DEFAULT_RATES},activeCur:[...DEFAULT_ACTIVE],entries:[],curCat:0,display:"0",
+carInfo:{vin:"",year:"",body:"",inter:"",vol:"",trim:""},showCarInfo:false,
 showReceipt:false,showSettings:true,showProfit:true,sellPrice:"",sellCurrency:"RUB",receiptImage:null,
 warehouse:[],expandedCar:null,sellingCarId:null,whSearch:"",whSort:"new",histOpen:false,
 sellFormPrice:"",sellFormCurr:"RUB",sellFormRate:"",sellFormDate:"",sellEditMode:false,
 editingEntry:null,editValue:"",editCurr:"RUB",editRate:"",
-editingCarId:null,editCarEntries:null,bulkRates:{},editName:"",editDate:"",editAskPrice:"",editNote:"",targetMarkup:"",
+editingCarId:null,editCarEntries:null,bulkRates:{},editName:"",editDate:"",editAskPrice:"",editNote:"",editInfo:null,targetMarkup:"",
 cbrBusy:false,cbrDate:"",cbrInfo:"",
 toast:null,backupHidden:false,statScope:"all",chartCat:null,listBuilder:null,
 carReceipts:{},confirmAction:null};
@@ -35,6 +36,7 @@ S.rates=dd.rates?{...DEFAULT_RATES,...dd.rates}:{...DEFAULT_RATES,EUR:dd.eurRate
 S.activeCur=Array.isArray(dd.activeCur)&&dd.activeCur.length?dd.activeCur.filter(c=>CUR[c]&&c!=="RUB"):[...DEFAULT_ACTIVE];
 S.entries=(Array.isArray(dd.entries)?dd.entries:[]).map(normalizeEntry).filter(Boolean);
 S.curCat=dd.curCat||0;S.sellPrice=dd.sellPrice||"";S.targetMarkup=dd.targetMarkup||"";
+S.carInfo=normCarInfo(dd.carInfo);
 S.sellCurrency=CUR[dd.sellCurrency]?dd.sellCurrency:"RUB"}}catch(e){}
 }
 function saveWH(){try{localStorage.setItem("autoCalc_wh",JSON.stringify(S.warehouse))}catch(e){}}
@@ -42,7 +44,7 @@ function saveDraft(){try{localStorage.setItem("autoCalc_draft",JSON.stringify({
 carName:S.carName,rates:S.rates,activeCur:S.activeCur,
 eurRate:S.rates.EUR,usdRate:S.rates.USD,
 entries:S.entries,curCat:S.curCat,sellPrice:S.sellPrice,sellCurrency:S.sellCurrency,
-targetMarkup:S.targetMarkup}))}catch(e){}}
+targetMarkup:S.targetMarkup,carInfo:S.carInfo}))}catch(e){}}
 
 // При первом запуске (нет сохранённой темы) берём системную; ручной выбор приоритетнее
 S.theme="dark";
@@ -128,6 +130,24 @@ function curInfo(c){if(CUR[c])return CUR[c];
 const safe=String(c||"?").replace(/[^A-Za-z0-9]/g,"").slice(0,6)||"?";
 return{symbol:safe,cls:"",label:safe,cbr:null}}
 
+// ===== ДАННЫЕ АВТО (VIN, год, цвета, объём, комплектация) =====
+// VIN — ВНУТРЕННЕЕ поле: хранится в карточке, виден менеджеру, в клиентский чек не попадает.
+// Чистка: латиница (без I/O/Q по стандарту, но не отсекаем — бывают frame numbers), цифры, дефис.
+function normVin(v){return String(v==null?"":v).toUpperCase().replace(/[^A-Z0-9-]/g,"").slice(0,20)}
+function normCarInfo(o){o=o&&typeof o==="object"?o:{};
+const yr=parseInt(o.year,10);
+return{vin:normVin(o.vin),
+year:(yr>=1950&&yr<=2100)?String(yr):"",
+body:typeof o.body==="string"?o.body.slice(0,40):"",
+inter:typeof o.inter==="string"?o.inter.slice(0,40):"",
+vol:typeof o.vol==="string"?o.vol.slice(0,10):(typeof o.vol==="number"&&isFinite(o.vol)?String(o.vol):""),
+trim:typeof o.trim==="string"?o.trim.slice(0,80):""}}
+// строка характеристик для чеков/карточки: «2023 г · 3.5 л · белый · салон бежевый» (пустое пропускаем)
+function carSpecsStr(ci){if(!ci)return"";
+const v=parseNum(ci.vol);
+const volTxt=ci.vol?(v>0?(v<=12?fmtD(v,v%1?1:0)+" л":fmt(v)+" см³"):ci.vol):"";
+return[ci.year?ci.year+" г.":"",volTxt,ci.body||"",ci.inter?"салон "+ci.inter:""].filter(Boolean).join(" · ")}
+
 // ===== ВАЛИДАЦИЯ ВХОДЯЩИХ ДАННЫХ (импорт и облако) =====
 // Любая машина из файла/облака проходит через normalizeCar: лишние поля
 // отбрасываются, типы приводятся, битые объекты возвращают null.
@@ -169,6 +189,8 @@ sellEurRate:String((sellRates&&sellRates.EUR)||""),
 sellUsdRate:String((sellRates&&sellRates.USD)||""),
 askPrice:(()=>{const ap=parseNum(c.askPrice);return ap>0?String(ap):""})(),
 note:typeof c.note==="string"?c.note.slice(0,500):"",
+// данные авто: VIN — внутренний (не для клиентского чека), остальное — клиентские характеристики
+info:normCarInfo(c.info),
 // история ключевых событий: чистим типы, отбрасываем мусор, лимит 50
 history:(Array.isArray(c.history)?c.history:[]).map(h=>{
 if(!h||typeof h!=="object")return null;
