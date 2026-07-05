@@ -236,7 +236,8 @@ h+=`${cloudBoxHTML()}<div class="backup-row">
 <div class="backup-btn" onclick="exportData()">💾 ЭКСПОРТ БАЗЫ</div>
 <div class="backup-btn" onclick="importData()">📥 ИМПОРТ БАЗЫ</div>
 <div class="backup-btn" onclick="exportCSV()">📊 EXCEL</div>
-<div class="backup-btn" onclick="shareStockList()">📤 СПИСОК</div></div>`;
+<div class="backup-btn" onclick="openListBuilder()">📤 СПИСОК</div></div>`;
+h+=listBuilderHTML();
 if(stk.length)h+=`<div class="stats-bar">
 <div class="stat-card"><div class="stat-num gold">${fmt(frozen)}</div><div class="stat-lbl">ЗАМОРОЖЕНО ₽</div></div>
 <div class="stat-card"><div class="stat-num blue">${avgAge}</div><div class="stat-lbl">СР. ДНЕЙ НА СКЛАДЕ</div></div></div>`;
