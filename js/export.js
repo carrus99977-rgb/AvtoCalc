@@ -50,11 +50,15 @@ return{id:c.id,name:c.name,cost:carCost(c),price:ap>0?String(ap):"",onRequest:!(
 render();
 setTimeout(()=>document.getElementById("list-builder")?.scrollIntoView({behavior:"smooth",block:"start"}),100)}
 function closeListBuilder(){S.listBuilder=null;render()}
-// наценка ко всем машинам с ценой: себестоимость × (1+%) + добавка, округление до 10 тыс ₽
+// лояльный разбор полей наценки: терпит «15%», «+200 000», «200000₽» — лишние символы отбрасываем
+// (строгий parseNum такие значения честно бракует, но здесь пользователь вводит «как привык»)
+function lbNum(v){return parseNum(String(v==null?"":v).replace(/[^\d.,\-]/g,""))}
+// наценка ко всем машинам с ценой: себестоимость × (1+%) + добавка, округление до 10 тыс ₽.
+// достаточно ЛЮБОГО одного поля: только %, только ₽ сверху — или оба сразу
 function lbApply(){const lb=S.listBuilder;if(!lb)return;
-const p=parseNum(lb.pct),a=parseNum(lb.add);
+const p=lbNum(lb.pct),a=lbNum(lb.add);
 const hasP=isFinite(p)&&p>-100,hasA=isFinite(a)&&a>0;
-if(!hasP&&!hasA){alert("Введите % наценки или сумму сверху");return}
+if(!hasP&&!hasA){alert("Введите наценку: % (например 15) или сумму сверху в ₽ (например 200000) — достаточно одного из двух");return}
 lb.items.forEach(it=>{if(it.onRequest)return;
 const v=it.cost*(1+(hasP?p:0)/100)+(hasA?a:0);
 it.price=String(Math.max(0,Math.round(v/10000)*10000))});
