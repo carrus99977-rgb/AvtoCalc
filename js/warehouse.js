@@ -436,6 +436,14 @@ return h}
 function staleDaysHTML(car){const d=daysBetween(car.date,new Date());
 const c=d>=90?"var(--neg)":d>=60?"var(--warn)":"";
 return c?` · <span style="color:${c};font-weight:700">${d} дн. на складе ${d>=90?"🔥":"⏳"}</span>`:` · ${d} дн. на складе`}
+// зафиксированный курс машины по валютам (из позиций): {USD:80.39, EUR:92.1}. Первый непустой курс на валюту
+// (после «курса рынка» они единые). RUB-only машина → пусто.
+function carFixRates(car){const by={};(car.entries||[]).forEach(e=>{
+if(e.currency&&e.currency!=="RUB"&&by[e.currency]===undefined){const r=parseNum(e.rate);if(r>0)by[e.currency]=r}});return by}
+function carRateChipHTML(car){const by=carFixRates(car);const sym={USD:"$",EUR:"€"};
+const parts=["USD","EUR"].filter(c=>by[c]>0).map(c=>`${sym[c]} ${fmtRate(by[c])}`);
+Object.keys(by).forEach(c=>{if(c!=="USD"&&c!=="EUR"&&by[c]>0)parts.push(`${c} ${fmtRate(by[c])}`)});
+return parts.length?`<span class="wh-rate-chip">💱 ${parts.join(" · ")}</span>`:""}
 function carCardHTML(car){
 const cost=carCost(car),exp=S.expandedCar===car.id,selling=S.sellingCarId===car.id,editing=S.editingCarId===car.id;
 const sellR=carSellRub(car),pr=sellR-cost;
@@ -443,7 +451,8 @@ const mk=cost>0?marketRates():null; // справочный эквивалент
 let h=`<div class="wh-card ${car.status==="sold"?"sold":""}"><div class="wh-card-header" onclick="togExp('${esc(car.id)}')">
 <div style="min-width:0"><div class="wh-car-name">🚗 ${esc(car.name)}</div>
 <div class="wh-card-sub"><span class="wh-status ${car.status}">${car.status==="stock"?"СКЛАД":car.status==="estimate"?"ПРИКИДКА":"ПРОДАНО"}</span><span>${dShort(car.date)}${car.status==="stock"?staleDaysHTML(car):""}</span></div>
-${car.info&&(car.info.body||car.info.inter||car.info.vin)?`<div class="wh-card-meta">${car.info.vin?`<span class="wh-vin-chip"># ${esc(car.info.vin)}</span>`:""}${carColorsHTML(car.info,false)?`<span class="wh-meta-colors">${carColorsHTML(car.info,false)}</span>`:""}</div>`:""}</div>
+${(()=>{const rate=carRateChipHTML(car),vin=car.info&&car.info.vin?`<span class="wh-vin-chip"># ${esc(car.info.vin)}</span>`:"",cols=car.info&&carColorsHTML(car.info,false)?`<span class="wh-meta-colors">${carColorsHTML(car.info,false)}</span>`:"";
+return(rate||vin||cols)?`<div class="wh-card-meta">${rate}${vin}${cols}</div>`:""})()}</div>
 <div style="text-align:right"><div class="wh-car-cost">${fmt(cost)} ₽</div>
 ${mk?`<div style="color:var(--t4);font-size:9px;margin-top:1px">≈ ${fmt(cost/mk.usd)} $${mk.eur?` · ${fmt(cost/mk.eur)} €`:""}</div>`:""}
 ${car.status==="sold"?`<div style="color:${pr>=0?"var(--pos)":"var(--neg)"};font-size:11px;font-weight:600">${pr>=0?"+":""}${fmt(pr)} ₽</div>`:""}</div></div>`;

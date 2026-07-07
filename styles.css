@@ -459,3 +459,7 @@ background:transparent;color:var(--t4);border:2px solid var(--br);letter-spacing
 .wh-card-meta{display:flex;flex-wrap:wrap;align-items:center;gap:5px 12px;margin-top:6px;font-size:10px;color:var(--t3,#889)}
 .wh-meta-colors{display:inline-flex;align-items:center;color:var(--t4,#99a)}
 .wh-vin-chip{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--t3);background:transparent;border:1px solid var(--br2);padding:2px 7px;border-radius:2px;white-space:nowrap}
+/* зафиксированный курс машины — чип с оранж-акцентом (курс = деньги), моно-цифры */
+.wh-rate-chip{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;letter-spacing:.5px;color:var(--gold);background:var(--bk-bg);border:1px solid var(--bk-br);padding:2px 7px;border-radius:2px;white-space:nowrap}
+/* светлая тема: текст чипа темнее — светлый оранж на бумаге давал контраст <4.5 */
+body.light .wh-rate-chip{color:#8a3d05}
