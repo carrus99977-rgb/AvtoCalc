@@ -447,14 +447,14 @@ return parts.length?`<span class="wh-rate-chip">💱 ${parts.join(" · ")}</span
 function carCardHTML(car){
 const cost=carCost(car),exp=S.expandedCar===car.id,selling=S.sellingCarId===car.id,editing=S.editingCarId===car.id;
 const sellR=carSellRub(car),pr=sellR-cost;
-const mk=cost>0?marketRates():null; // справочный эквивалент в валюте по рыночному курсу банка
+const rateChip=carRateChipHTML(car); // зафиксированный за позициями курс — под ценой справа
 let h=`<div class="wh-card ${car.status==="sold"?"sold":""}"><div class="wh-card-header" onclick="togExp('${esc(car.id)}')">
 <div style="min-width:0"><div class="wh-car-name">🚗 ${esc(car.name)}</div>
 <div class="wh-card-sub"><span class="wh-status ${car.status}">${car.status==="stock"?"СКЛАД":car.status==="estimate"?"ПРИКИДКА":"ПРОДАНО"}</span><span>${dShort(car.date)}${car.status==="stock"?staleDaysHTML(car):""}</span></div>
-${(()=>{const rate=carRateChipHTML(car),vin=car.info&&car.info.vin?`<span class="wh-vin-chip"># ${esc(car.info.vin)}</span>`:"",cols=car.info&&carColorsHTML(car.info,false)?`<span class="wh-meta-colors">${carColorsHTML(car.info,false)}</span>`:"";
-return(rate||vin||cols)?`<div class="wh-card-meta">${rate}${vin}${cols}</div>`:""})()}</div>
+${(()=>{const vin=car.info&&car.info.vin?`<span class="wh-vin-chip"># ${esc(car.info.vin)}</span>`:"",cols=car.info&&carColorsHTML(car.info,false)?`<span class="wh-meta-colors">${carColorsHTML(car.info,false)}</span>`:"";
+return(vin||cols)?`<div class="wh-card-meta">${vin}${cols}</div>`:""})()}</div>
 <div style="text-align:right"><div class="wh-car-cost">${fmt(cost)} ₽</div>
-${mk?`<div style="color:var(--t4);font-size:9px;margin-top:1px">≈ ${fmt(cost/mk.usd)} $${mk.eur?` · ${fmt(cost/mk.eur)} €`:""}</div>`:""}
+${rateChip?`<div style="margin-top:4px">${rateChip}</div>`:""}
 ${car.status==="sold"?`<div style="color:${pr>=0?"var(--pos)":"var(--neg)"};font-size:11px;font-weight:600">${pr>=0?"+":""}${fmt(pr)} ₽</div>`:""}</div></div>`;
 
 if(exp&&editing&&S.editCarEntries){
