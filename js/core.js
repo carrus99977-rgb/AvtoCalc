@@ -175,6 +175,10 @@ if(/^#[0-9a-fA-F]{3}$/.test(v))return("#"+v[1]+v[1]+v[2]+v[2]+v[3]+v[3]).toLower
 return COLOR_NAMES[v.toLowerCase()]||""}
 // «свой» цвет = валидный, но не из пресетов (для подсветки кнопки палитры)
 function isCustomColor(hex){return !!hex&&CAR_COLORS.indexOf(hex)<0}
+// обратный поиск hex→русское название (для ТЕКСТОВОГО списка клиенту, где кружок не покажешь).
+// Первое имя на каждый hex — каноничное; кастомный цвет → сам код.
+const _COLOR_HEX2NAME=(()=>{const m={};Object.keys(COLOR_NAMES).forEach(n=>{const h=COLOR_NAMES[n];if(!(h in m))m[h]=n});return m})();
+function colorLabel(hex){return hex?(_COLOR_HEX2NAME[hex]||hex):""}
 // один залитый кружок для HTML (карточка, HTML-чек)
 function colorDot(hex){return hex?`<span style="display:inline-block;width:13px;height:13px;border-radius:50%;background:${esc(hex)};border:1px solid rgba(128,128,128,.55);vertical-align:middle;margin-left:4px"></span>`:""}
 // подпись+кружок кузова и салона: full=«Цвет кузова:», иначе коротко «Кузов»

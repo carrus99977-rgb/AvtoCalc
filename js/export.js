@@ -77,7 +77,14 @@ let t="🚗 МАШИНЫ В НАЛИЧИИ ("+new Date().toLocaleDateString("ru-
 for(const it of inc){
 const p=parseRub(it.price); // целые рубли («500,000»=500000)
 if(!it.onRequest&&!(p>0)){alert("У «"+it.name+"» нет цены — введите или поставьте ПО ЗАПРОСУ");return}
-t+="• "+it.name+(it.onRequest?" — цена по запросу":" — "+fmt(p)+" ₽")+"\n"}
+t+="• "+it.name+(it.onRequest?" — цена по запросу":" — "+fmt(p)+" ₽")+"\n";
+// характеристики из карточки (если заполнены): год · объём · цвет кузова/салона · комплектация
+const car=S.warehouse.find(c=>c.id===it.id),ci=car&&car.info;
+if(ci){const d=[];const spec=carSpecsStr(ci);if(spec)d.push(spec);
+if(ci.body)d.push("кузов "+colorLabel(ci.body));
+if(ci.inter)d.push("салон "+colorLabel(ci.inter));
+if(ci.trim)d.push(ci.trim);
+if(d.length)t+="   "+d.join(" · ")+"\n"}}
 t=t.trim();
 if(lb.save){ // запомнить цены в карточках: «цена для клиента» и чек 👤 покажут те же цифры.
 // скрытые машины не трогаем — их цена в карточке остаётся как была
