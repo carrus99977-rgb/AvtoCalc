@@ -200,10 +200,12 @@ transform:rotate(-12deg);font-family:'Oswald',sans-serif;font-weight:700;font-si
 color:rgba(255,95,77,.09);pointer-events:none;text-transform:uppercase;z-index:1}
 body.light .wh-card.sold::before{color:rgba(160,51,40,.08)}
 .wh-card-header{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+/* имя — на своей строке целиком (не режем), статус-штамп ушёл на строку с датой ниже — единообразно у всех карточек */
 .wh-car-name{font-family:'Oswald',sans-serif;font-size:15px;font-weight:600;color:var(--t0);letter-spacing:1.5px}
+.wh-card-sub{display:flex;align-items:center;flex-wrap:wrap;gap:8px;color:var(--t4);font-size:10px;margin-top:3px}
 .wh-car-cost{font-size:13px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums}
 /* статусы = штампы: жёсткая рамка, разрядка, без скругления */
-.wh-status{display:inline-block;padding:2px 8px;border-radius:2px;font-size:9px;font-weight:700;letter-spacing:2px;margin-left:8px;text-transform:uppercase}
+.wh-status{flex:0 0 auto;display:inline-block;padding:2px 8px;border-radius:2px;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;white-space:nowrap}
 .wh-status.stock{background:transparent;color:#3ecf83;border:2px solid rgba(62,207,131,.55)}
 .wh-status.sold{background:transparent;color:#ff7a64;border:2px double rgba(255,95,77,.65);transform:rotate(-3deg);display:inline-block}
 .wh-status.estimate{background:transparent;color:#8fb8e8;border:2px solid rgba(110,160,220,.55)}

@@ -145,15 +145,16 @@ render()}
 // ===== МАССОВОЕ ПРИМЕНЕНИЕ РЫНОЧНОГО КУРСА (стоки + прикидки) =====
 // Перебивает курс ВСЕХ валютных позиций выбранных машин на рыночный (Камкомбанк, можно поправить) —
 // себестоимость пересчитывается. С подтверждением и отменой (снимок машин).
-function raCars(){return S.warehouse.filter(c=>c.status==="stock"||c.status==="estimate")}
+// scope: "stock" (склад) или "estimate" (прикидки) — курс применяем раздельно, не смешивая
+function raCars(scope){return S.warehouse.filter(c=>scope?c.status===scope:(c.status==="stock"||c.status==="estimate"))}
 const raR4=x=>String(Math.round(x*1e4)/1e4); // курс рынка → 4 знака (как applyMarket)
-function openRateApply(){const cars=raCars();
-if(!cars.length){alert("Нет машин на складе или в прикидках");return}
+function openRateApply(scope){scope=scope==="estimate"?"estimate":"stock";const cars=raCars(scope);
+if(!cars.length){alert(scope==="estimate"?"Нет прикидок":"Склад пуст");return}
 if(!cars.some(c=>c.entries.some(e=>e.currency!=="RUB"))){alert("Нет валютных позиций — курс применять не к чему");return}
 // панели/режимы взаимоисключаемы: открытая правка + применение курса иначе откатят друг друга
 S.listBuilder=null;S.clientQuote=null;S.editingCarId=null;S.editCarEntries=null;S.sellingCarId=null;S.sellEditMode=false;
 const mk=marketRates();
-S.rateApply={fromMarket:!!(mk&&mk.usd>0),rates:{USD:mk&&mk.usd>0?raR4(mk.usd):(numStr(S.rates.USD)||""),EUR:mk&&mk.eur>0?raR4(mk.eur):(numStr(S.rates.EUR)||"")},
+S.rateApply={scope,fromMarket:!!(mk&&mk.usd>0),rates:{USD:mk&&mk.usd>0?raR4(mk.usd):(numStr(S.rates.USD)||""),EUR:mk&&mk.eur>0?raR4(mk.eur):(numStr(S.rates.EUR)||"")},
 items:cars.map(c=>({id:c.id,off:false}))};
 render();
 // рынок не прогрет — тянем в фоне; НЕ перетираем, если пользователь уже печатает в поле (как prefetchRates)
@@ -216,12 +217,13 @@ undo.forEach(s=>{const c=S.warehouse.find(x=>x.id===s.id);if(!c)return;
 c.entries=s.entries;c.rates=s.rates;c.eurRate=s.eurRate;c.usdRate=s.usdRate;c.history=s.history;
 touch(c);cloudUpsert(c)}); // touch (не старый updatedAt) — иначе отмена проиграет LWW другому устройству
 saveWH();render()})})}
-function rateApplyHTML(){const ra=S.rateApply;if(!ra)return"";
-const byId={};raCars().forEach(c=>byId[c.id]=c);
+function rateApplyHTML(forScope){const ra=S.rateApply;if(!ra)return"";
+if(forScope&&ra.scope!==forScope)return""; // панель показываем в своём разделе (склад/прикидки)
+const byId={};raCars(ra.scope).forEach(c=>byId[c.id]=c);
 const items=ra.items.filter(it=>byId[it.id]);
 const pr=raPr();
 const nSel=items.filter(it=>!it.off&&raWillApply(byId[it.id],pr)).length;
-let h=`<div class="coll-box" id="rate-apply"><div class="coll-header" style="cursor:default"><span>🏦 Рыночный курс → машинам</span></div>
+let h=`<div class="coll-box" id="rate-apply"><div class="coll-header" style="cursor:default"><span>🏦 Рыночный курс → ${ra.scope==="estimate"?"прикидкам":"складу"}</span></div>
 <div class="coll-body">
 <div style="color:var(--t3);font-size:10px;line-height:1.5;margin-bottom:8px">Курс с рынка (Камкомбанк) — можно поправить. Применяется ко ВСЕМ валютным позициям отмеченных машин; себестоимость пересчитается (с отменой).</div>
 ${!ra.fromMarket?`<div style="color:var(--warn);font-size:10px;margin-bottom:8px">⚠ Рыночный курс не загрузился — в полях подставлены текущие курсы калькулятора. Жми «↻ РЫНОК» или впиши вручную.</div>`:""}
@@ -400,12 +402,12 @@ h+=`${cloudBoxHTML()}<div class="backup-row">
 <div class="backup-btn" onclick="exportCSV()">📊 EXCEL</div>
 <div class="backup-btn" onclick="openListBuilder()">📤 СПИСОК</div></div>`;
 h+=listBuilderHTML();
-h+=rateApplyHTML();
+h+=rateApplyHTML("stock");
 if(stk.length)h+=`<div class="stats-bar">
 <div class="stat-card"><div class="stat-num gold">${fmt(frozen)}</div><div class="stat-lbl">ЗАМОРОЖЕНО ₽</div></div>
 <div class="stat-card"><div class="stat-num blue">${avgAge}</div><div class="stat-lbl">СР. ДНЕЙ НА СКЛАДЕ</div></div></div>`;
 if(S.warehouse.length)h+=`<input type="text" class="wh-search" placeholder="🔍 Поиск по названию" value="${esc(S.whSearch)}" oninput="S.whSearch=this.value;rLists()">
-<div class="sort-row">${[["new","СНАЧАЛА НОВЫЕ"],["old","СТАРЫЕ"],["exp","ДОРОЖЕ"],["cheap","ДЕШЕВЛЕ"]].map(([k,lbl])=>`<div class="sort-chip ${S.whSort===k?"active":""}" onclick="S.whSort='${k}';render()">${lbl}</div>`).join("")}<div class="sort-chip rate-chip" onclick="openRateApply()">🏦 КУРС РЫНКА</div></div>`;
+<div class="sort-row">${[["new","СНАЧАЛА НОВЫЕ"],["old","СТАРЫЕ"],["exp","ДОРОЖЕ"],["cheap","ДЕШЕВЛЕ"]].map(([k,lbl])=>`<div class="sort-chip ${S.whSort===k?"active":""}" onclick="S.whSort='${k}';render()">${lbl}</div>`).join("")}<div class="sort-chip rate-chip" onclick="openRateApply('stock')">🏦 КУРС РЫНКА</div></div>`;
 h+=`<div id="wh-list">${stockListHTML()}</div>`;
 return h}
 
@@ -413,6 +415,10 @@ function estHTML(){
 const est=S.warehouse.filter(c=>c.status==="estimate");
 if(!est.length)return ""; // нет прикидок — секцию не показываем вовсе
 let h=`<div class="section-divider est" id="est-section"><span>📝 Прикидки (${est.length})</span></div>`;
+// отдельная кнопка курса рынка для прикидок (не смешивается со складом) — только если есть валютные позиции
+if(est.some(c=>c.entries.some(e=>e.currency!=="RUB")))
+h+=`<div class="sort-row" style="justify-content:flex-end;margin-bottom:8px"><div class="sort-chip rate-chip" onclick="openRateApply('estimate')">🏦 КУРС РЫНКА</div></div>`;
+h+=rateApplyHTML("estimate");
 h+=est.map(c=>carCardHTML(c)).join("");
 return h}
 
@@ -435,8 +441,8 @@ const cost=carCost(car),exp=S.expandedCar===car.id,selling=S.sellingCarId===car.
 const sellR=carSellRub(car),pr=sellR-cost;
 const mk=cost>0?marketRates():null; // справочный эквивалент в валюте по рыночному курсу банка
 let h=`<div class="wh-card ${car.status==="sold"?"sold":""}"><div class="wh-card-header" onclick="togExp('${esc(car.id)}')">
-<div style="min-width:0"><div class="wh-car-name">🚗 ${esc(car.name)}<span class="wh-status ${car.status}">${car.status==="stock"?"СКЛАД":car.status==="estimate"?"ПРИКИДКА":"ПРОДАНО"}</span></div>
-<div style="color:var(--t4);font-size:10px;margin-top:2px">${dShort(car.date)}${car.status==="stock"?staleDaysHTML(car):""}</div>
+<div style="min-width:0"><div class="wh-car-name">🚗 ${esc(car.name)}</div>
+<div class="wh-card-sub"><span class="wh-status ${car.status}">${car.status==="stock"?"СКЛАД":car.status==="estimate"?"ПРИКИДКА":"ПРОДАНО"}</span><span>${dShort(car.date)}${car.status==="stock"?staleDaysHTML(car):""}</span></div>
 ${car.info&&(car.info.body||car.info.inter||car.info.vin)?`<div class="wh-card-meta">${car.info.vin?`<span class="wh-vin-chip"># ${esc(car.info.vin)}</span>`:""}${carColorsHTML(car.info,false)?`<span class="wh-meta-colors">${carColorsHTML(car.info,false)}</span>`:""}</div>`:""}</div>
 <div style="text-align:right"><div class="wh-car-cost">${fmt(cost)} ₽</div>
 ${mk?`<div style="color:var(--t4);font-size:9px;margin-top:1px">≈ ${fmt(cost/mk.usd)} $${mk.eur?` · ${fmt(cost/mk.eur)} €`:""}</div>`:""}
