@@ -15,9 +15,16 @@ module.exports = async (req, res) => {
     return;
   }
   try {
+    // ABCEX блокирует часть серверных IP (US-регион Vercel отдавал 403 — функция вынесена в fra1/EU).
+    // Браузерные заголовки — на случай, если анти-бот смотрит IP+UA вместе.
     const r = await fetch(ABCEX_URL, {
       signal: AbortSignal.timeout(12000),
-      headers: { "User-Agent": "AvtoCalc/1.0" },
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Origin": "https://abcex.io",
+        "Referer": "https://abcex.io/",
+      },
     });
     if (!r.ok) throw new Error("abcex http " + r.status);
     const data = await r.json();
