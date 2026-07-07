@@ -15,16 +15,16 @@ rows.push(["Название","VIN","Дата добавления","Стату�
 S.warehouse.forEach(car=>{
 const cost=carCost(car),sold=car.status==="sold";
 const sellR=sold?carSellRub(car):0,pr=sellR-cost;
-rows.push([car.name,(car.info&&car.info.vin)||"",dShort(car.date),sold?"Продано":car.status==="estimate"?"Прикидка":"Склад",csvNum(cost),
+rows.push([car.name,(car.info&&car.info.vin)||"",dShort(car.date),sold?"Продано":car.status==="estimate"?"Прикидка":car.status==="transit"?"В пути":"Склад",csvNum(cost),
 sold&&car.sellDate?dShort(car.sellDate):"",
 sold?csvNum(sellR):"",sold?csvNum(pr):"",
 sold&&cost>0?csvNum(pr/cost*100):"",sold&&sellR>0?csvNum(pr/sellR*100):"",
-sold?(car.sellDate?String(daysBetween(car.date,car.sellDate)):""):String(daysBetween(car.date,new Date()))])});
+sold?(car.sellDate?String(daysBetween(car.date,car.sellDate)):""):(car.status==="stock"?String(daysBetween(car.date,new Date())):"")])});
 rows.push([]);
 rows.push(["ДЕТАЛИЗАЦИЯ РАСХОДОВ"]);
 rows.push(["Машина","Статус","Категория","Валюта","Сумма","Курс ₽","Сумма ₽"]);
 S.warehouse.forEach(car=>{
-const cr=carRates(car),st=car.status==="sold"?"Продано":car.status==="estimate"?"Прикидка":"Склад";
+const cr=carRates(car),st=car.status==="sold"?"Продано":car.status==="estimate"?"Прикидка":car.status==="transit"?"В пути":"Склад";
 car.entries.forEach(e=>{const r=entryRate(e,cr);
 rows.push([car.name,st,e.label,e.currency,csvNum(e.amount),
 e.currency==="RUB"?"":(r?csvNum(r):"⚠ нет курса"),

@@ -229,7 +229,7 @@ const sel=ra.items.filter(it=>!it.off).map(it=>S.warehouse.find(c=>c.id===it.id)
 if(!sel.length){alert("Нет отмеченных машин с валютными позициями под этот курс");return}
 showConfirm(`Применить рыночный курс к ${sel.length} маш.? Курс всех валютных позиций будет перебит, себестоимость пересчитается.`,()=>{
 const undo=[]; // снимок только реально изменённых машин
-sel.forEach(car=>{const old=carCost(car);
+sel.forEach(car=>{const old=carCost(car);const oldR={...carRates(car)}; // КОПИЯ курса ДО применения (car.rates мутируется по ссылке)
 const before={id:car.id,entries:JSON.parse(JSON.stringify(car.entries)),rates:{...(car.rates||{})},
 eurRate:car.eurRate,usdRate:car.usdRate,history:JSON.parse(JSON.stringify(car.history||[]))};
 let mut=false;
@@ -241,7 +241,9 @@ car.eurRate=car.rates.EUR||"";car.usdRate=car.rates.USD||"";
 if(!mut)return; // курс уже такой — не пишем историю и не синкаем
 undo.push(before);
 const nw=carCost(car),d=Math.round(nw)-Math.round(old);
-addHist(car,"edited","рыночный курс: "+fmt(nw)+" ₽"+(d?" ("+(d>0?"+":"")+fmt(d)+")":""));
+// показываем какой курс был → стал (по каждой применённой валюте)
+const sym={USD:"$",EUR:"€"},rc=[];["USD","EUR"].forEach(k=>{if(pr[k]>0&&used.has(k)){const o=numStr(oldR&&oldR[k]||""),n=numStr(pr[k]);if(o!==n)rc.push((sym[k])+" "+(o?fmtRate(Number(o)):"—")+"→"+fmtRate(Number(n)))}});
+addHist(car,"edited","рыночный курс"+(rc.length?" "+rc.join(", "):"")+": "+fmt(nw)+" ₽"+(d?" ("+(d>0?"+":"")+fmt(d)+")":""));
 touch(car);cloudUpsert(car)});
 saveWH();S.rateApply=null;render();
 if(!undo.length){showToast("Курс уже такой — ничего не изменилось");return}
@@ -300,6 +302,27 @@ else doCopy()}
 function isoToDateInput(iso){try{const d=new Date(iso);if(isNaN(d))return"";
 const p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())}catch(e){return""}}
 function carDateInput(car){return isoToDateInput(car.date)}
+// Человекочитаемый дифф правки для истории: что именно менялось (курсы валют, суммы позиций,
+// добавленные/удалённые позиции). Возвращает массив коротких строк «поле: было→стало».
+function editDiffNote(oldE,newE){
+const sym={USD:"$",EUR:"€"};const parts=[];
+// курс валюты берём из самих позиций (e.rate) — там правится в редакторе, не в car.rates
+const ratesOf=arr=>{const r={};(arr||[]).forEach(e=>{if(e.currency&&e.currency!=="RUB"&&!(e.currency in r)){const v=numStr(e.rate);if(v)r[e.currency]=v}});return r};
+const oR=ratesOf(oldE),nR=ratesOf(newE);
+["USD","EUR"].forEach(c=>{const o=oR[c]||"",n=nR[c]||"";
+if(o!==n&&(o||n))parts.push("курс "+(sym[c]||c)+" "+(o?fmtRate(Number(o)):"—")+"→"+(n?fmtRate(Number(n)):"—"))});
+// позиции — сопоставляем по названию (label), запасной ключ — категория
+const key=e=>(e.label||e.category||"позиция");
+const oldByKey={};(oldE||[]).forEach(e=>{if(!(key(e)in oldByKey))oldByKey[key(e)]=e});
+const seen=new Set();
+(newE||[]).forEach(e=>{const k=key(e);seen.add(k);const o=oldByKey[k];
+const cur=e.currency==="RUB"?"₽":(sym[e.currency]||e.currency);
+const na=Math.round(parseNum(e.amount));
+if(!o)parts.push("+ "+k+": "+fmt(na)+" "+cur);
+else{const oa=Math.round(parseNum(o.amount));if(oa!==na)parts.push(k+": "+fmt(oa)+"→"+fmt(na)+" "+cur)}});
+(oldE||[]).forEach(e=>{if(!seen.has(key(e)))parts.push("− "+key(e))});
+return parts}
+
 function startCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 S.editingCarId=id;S.sellingCarId=null;S.sellEditMode=false;S.clientQuote=null;S.rateApply=null;S.listBuilder=null;S.expandedCar=id;
 S.editName=car.name;S.editDate=carDateInput(car);S.editAskPrice=car.askPrice||"";S.editNote=car.note||"";
@@ -316,6 +339,9 @@ if(!String(S.editName||"").trim()){alert("Введите название авт
 for(const e of S.editCarEntries){if(!(parseNum(e.amount)>0)){alert("Проверьте суммы — есть пустые или нулевые");return}
 if(e.currency!=="RUB"&&!(parseNum(e.rate)>0)){alert("Проверьте курсы — есть пустые");return}}
 const oldCost=carCost(car); // себестоимость до правки — для истории
+// снимок ДО перезаписи — чтобы в истории показать что именно менялось (курсы, суммы позиций)
+const oldEntriesSnap=car.entries.map(e=>({label:e.label,category:e.category,amount:e.amount,currency:e.currency,rate:e.rate}));
+const oldNameSnap=car.name;
 // сигнатура значимых полей (дата — на уровне дня): событие пишем, только если реально что-то изменилось
 const sig=c=>JSON.stringify({n:c.name||"",no:c.note||"",a:c.askPrice||"",d:carDateInput(c),e:c.entries,i:c.info||null});
 const before=sig(car);
@@ -328,7 +354,10 @@ const ap=parseRub(S.editAskPrice);car.askPrice=ap>0?String(ap):""; // целые
 // пустую/битую дату не трогаем; иначе фиксируем полдень выбранного дня (без сдвига пояса)
 if(/^\d{4}-\d{2}-\d{2}$/.test(S.editDate||"")){const d=new Date(S.editDate+"T12:00:00");if(!isNaN(d))car.date=d.toISOString()}
 if(sig(car)!==before){const newCost=carCost(car);const dCost=Math.round(newCost)-Math.round(oldCost); // дельта на уровне ₽
-addHist(car,"edited",fmt(newCost)+" ₽"+(dCost?" ("+(dCost>0?"+":"")+fmt(dCost)+")":""));}
+const parts=editDiffNote(oldEntriesSnap,car.entries); // что именно менялось (курсы из позиций, суммы)
+if(car.name!==oldNameSnap)parts.unshift("название");
+let det=parts.join(" · ");if(det.length>88)det=det.slice(0,87)+"…"; // оставляем место для итоговой суммы (лимит 120)
+addHist(car,"edited",(det?det+" · ":"")+fmt(newCost)+" ₽"+(dCost?" ("+(dCost>0?"+":"")+fmt(dCost)+")":""));}
 S.editingCarId=null;S.editCarEntries=null;touch(car);saveWH();cloudUpsert(car);render()}
 function updEditEntry(i,field,val){if(!S.editCarEntries)return;S.editCarEntries[i][field]=val;updEditCost()}
 function updEditCost(){if(!S.editCarEntries)return;
