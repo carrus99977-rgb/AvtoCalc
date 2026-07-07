@@ -44,6 +44,24 @@ touch(car);saveWH();cloudUpsert(car);render();
 showToast("Машина в пути","Отменить",()=>{const c=S.warehouse.find(x=>x.id===id);if(!c)return;
 c.status="estimate";c.date=oldDate;c.transitCheckAt=null;touch(c);saveWH();cloudUpsert(c);render()})}
 
+// Со склада обратно в прикидки (ошибочно оформил как покупку). Дату не трогаем.
+function stockToEstimate(id){const car=S.warehouse.find(c=>c.id===id);if(!car||car.status!=="stock")return;
+S.rateApply=null;
+car.status="estimate";car.transitCheckAt=null;
+addHist(car,"edited","склад → прикидка");
+touch(car);saveWH();cloudUpsert(car);render();
+showToast("Машина в прикидках","Отменить",()=>{const c=S.warehouse.find(x=>x.id===id);if(!c)return;
+c.status="stock";touch(c);saveWH();cloudUpsert(c);render()})}
+
+// Со склада в путь (ещё не приехала). Дата = момент отправки, заводим метку напоминания.
+function stockToTransit(id){const car=S.warehouse.find(c=>c.id===id);if(!car||car.status!=="stock")return;
+S.rateApply=null;const oldDate=car.date;
+car.status="transit";car.date=new Date().toISOString();car.transitCheckAt=car.date;
+addHist(car,"edited","склад → в пути");
+touch(car);saveWH();cloudUpsert(car);render();
+showToast("Машина в пути","Отменить",()=>{const c=S.warehouse.find(x=>x.id===id);if(!c)return;
+c.status="stock";c.date=oldDate;c.transitCheckAt=null;touch(c);saveWH();cloudUpsert(c);render()})}
+
 // В пути → на склад: машина пришла. Дата покупки/поступления = сегодня (дальше как обычный сток).
 function transitToStock(id){const car=S.warehouse.find(c=>c.id===id);if(!car||car.status!=="transit")return;
 S.rateApply=null;const oldDate=car.date,oldCheck=car.transitCheckAt;
@@ -642,6 +660,9 @@ if(car.status==="estimate"){h+=`<div class="btn-action btn-order" title="Зак�
 h+=`<div class="btn-action btn-ghost g-blue" title="Название, дата, курсы и суммы" onclick="event.stopPropagation();startCarEdit('${esc(car.id)}')">✏️ ПРАВКА</div>`;
 if(car.status!=="sold"){h+=`<div class="btn-action btn-ghost g-violet" title="Скопировать расчёт в калькулятор" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋 В КАЛЬКУЛЯТОР</div>`}
 else{h+=`<div class="btn-action btn-ghost g-violet" title="Вернуть на склад" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
+// со склада можно вернуть в прикидку или отправить в путь (ошибочно оформил / ещё не приехала)
+if(car.status==="stock"){h+=`<div class="btn-action btn-ghost g-blue" title="Вернуть в прикидки (ошибочно оформил как покупку)" onclick="event.stopPropagation();stockToEstimate('${esc(car.id)}')">📝 В ПРИКИДКУ</div>
+<div class="btn-action btn-ghost g-amber" title="Ещё не приехала — отправить в раздел «В пути»" onclick="event.stopPropagation();stockToTransit('${esc(car.id)}')">🚚 В ПУТЬ</div>`}
 if(car.status==="stock"||car.status==="sold")h+=`<div class="btn-action btn-ghost g-green" title="Чек с ценой для клиента — БЕЗ себестоимости" onclick="event.stopPropagation();${car.status==="sold"?"carClientShare":"openClientQuote"}('${esc(car.id)}')">👤 ЧЕК КЛИЕНТУ</div>`;
 h+=`
 <div class="btn-action btn-ghost g-amber" title="Скачать внутренний чек (с себестоимостью)" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">⬇️ ЧЕК СЕБЕ</div>
