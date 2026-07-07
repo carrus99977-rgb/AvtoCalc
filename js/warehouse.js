@@ -237,7 +237,7 @@ const hasFx=car.entries.some(e=>e.currency!=="RUB");
 h+=`<div class="edit-entry-card" style="padding:8px 10px;${it.off?"opacity:.5":""}">
 <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
 <input type="checkbox" ${it.off?"":"checked"} onchange="raToggle('${esc(car.id)}',this.checked)">
-<span style="flex:1;min-width:0">🚗 ${esc(car.name)}${car.status==="estimate"?` · <span style="color:var(--t4)">прикидка</span>`:""}</span></label>
+<span style="flex:1;min-width:0;color:var(--t0);font-weight:600">🚗 ${esc(car.name)}${car.status==="estimate"?` · <span style="color:var(--t3);font-weight:400">прикидка</span>`:""}</span></label>
 <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-top:5px;padding-left:26px">
 <span style="color:var(--t4)">${fmt(cur)} ₽${willApply?` → <b id="ra-nc-${esc(car.id)}" style="color:var(--gold)">${fmt(Math.round(nw))} ₽</b>`:` <span style="color:var(--t4)">(${hasFx?"нет курса для валюты":"нет валютных"})</span>`}</span>
 ${willApply?`<span id="ra-d-${esc(car.id)}" style="color:${d>0?"var(--neg)":d<0?"var(--pos)":"var(--t4)"}">${d?(d>0?"+":"")+fmt(d)+" ₽":""}</span>`:""}</div></div>`});
