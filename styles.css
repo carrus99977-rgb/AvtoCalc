@@ -425,6 +425,8 @@ background:transparent;color:var(--t4);border:2px solid var(--br);letter-spacing
 /* оранжевое действие-деньги во всю ширину сверху — явный акцент; удаление тоже во всю ширину снизу */
 .wh-actions .btn-primary{flex:1 1 100%;letter-spacing:2px}
 .wh-actions .btn-danger{flex:1 1 100%}
+/* «ЗАКАЗАЛ» — крупная зелёная заливка во всю ширину, прямо под «НА СКЛАД» */
+.wh-actions .btn-order{flex:1 1 100%;letter-spacing:2px;background:#1f9d57;color:#fff;border:2px solid #1f9d57}
 /* цветные «призраки» — контур+подпись в своём цвете (не заливка): цвет = опознавание, иерархия держится */
 .btn-ghost.g-blue{border-color:rgba(90,150,215,.5);color:#8fb8e8}
 .btn-ghost.g-violet{border-color:rgba(150,130,225,.5);color:#b4a5ee}
@@ -440,7 +442,7 @@ background:transparent;color:var(--t4);border:2px solid var(--br);letter-spacing
 .wh-actions .btn-green:hover{filter:brightness(1.1)}
 .wh-actions .btn-blue:hover{background:rgba(90,150,215,.12)}
 .wh-actions .btn-outline:hover{border-color:var(--gold);color:var(--t0)}
-.wh-actions .btn-primary:hover{filter:brightness(1.1)}
+.wh-actions .btn-primary:hover,.wh-actions .btn-order:hover{filter:brightness(1.1)}
 .wh-actions .btn-ghost:hover{background:rgba(172,167,156,.09);border-color:var(--t4);color:var(--t0)}
 .wh-actions .btn-danger:hover{background:rgba(255,95,77,.12);border-color:rgba(255,95,77,.7);color:#ff5f4d}
 .wh-actions .g-blue:hover{background:rgba(90,150,215,.12);border-color:rgba(90,150,215,.78);color:#bcd6f2}
