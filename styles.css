@@ -156,10 +156,13 @@ font-size:16px;font-weight:700;color:var(--gold);letter-spacing:4px;text-transfo
 .section-divider.sold span{color:#ff7a64}
 .section-divider.stats span{color:#8fb8e8}
 .section-divider.est span{color:#8fb8e8}
-/* светлая тема: заголовки секций захардкожены синей пастелью #8fb8e8 (на бумаге не читается);
+.section-divider.transit span{color:#e8b061}
+/* светлая тема: заголовки секций захардкожены пастелью (на бумаге не читается);
    прибыль/маржа теперь берут --pos/--neg (тематизируются токеном сами). */
 body.light .section-divider.stats span,body.light .section-divider.est span{color:#1a5276}
 body.light .section-divider.sold span{color:#a03328}
+body.light .section-divider.transit span{color:#8a6d0b}
+body.light .wh-status.transit{color:#8a6d0b}
 /* светлая тема: контурные подписи темнее — на светлом пастель не читается */
 body.light .btn-blue,body.light .btn-ghost.g-blue,body.light .cbr-btn{color:#1a5276;border-color:rgba(26,82,118,.5)}
 body.light .btn-yellow,body.light .btn-ghost.g-amber{color:#8a6d0b;border-color:rgba(138,109,11,.55)}
@@ -209,6 +212,7 @@ body.light .wh-card.sold::before{color:rgba(160,51,40,.08)}
 .wh-status.stock{background:transparent;color:#3ecf83;border:2px solid rgba(62,207,131,.55)}
 .wh-status.sold{background:transparent;color:#ff7a64;border:2px double rgba(255,95,77,.65);transform:rotate(-3deg);display:inline-block}
 .wh-status.estimate{background:transparent;color:#8fb8e8;border:2px solid rgba(110,160,220,.55)}
+.wh-status.transit{background:transparent;color:#e8b061;border:2px solid rgba(232,161,60,.6)}
 /* штампы-статусы: в светлой теме тёмные подписи (пастель на бумаге не читалась) */
 body.light .wh-status.stock{color:#187a43}
 body.light .wh-status.sold{color:#a03328}

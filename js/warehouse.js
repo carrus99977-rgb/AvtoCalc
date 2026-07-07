@@ -14,15 +14,17 @@ S.warehouse.unshift({id:uid(),name:S.carName.trim(),date:new Date().toISOString(
 rates:cleanRates,eurRate:cleanRates.EUR||"",usdRate:cleanRates.USD||"",
 entries:JSON.parse(JSON.stringify(S.entries)),note:"",updatedAt:new Date().toISOString(),
 info:normCarInfo(S.carInfo),askPrice,
-status,sellPrice:"",sellCurrency:"RUB",sellDate:null,sellRates:null,sellEurRate:"",sellUsdRate:"",history:[]});
-addHist(S.warehouse[0],"created",fmt(carCost(S.warehouse[0]))+" ₽"+(status==="estimate"?" · прикидка":""));
+status,transitCheckAt:status==="transit"?new Date().toISOString():null,
+sellPrice:"",sellCurrency:"RUB",sellDate:null,sellRates:null,sellEurRate:"",sellUsdRate:"",history:[]});
+addHist(S.warehouse[0],"created",fmt(carCost(S.warehouse[0]))+" ₽"+(status==="estimate"?" · прикидка":status==="transit"?" · в пути":""));
 saveWH();cloudUpsert(S.warehouse[0]);
 S.carName="";S.entries=[];S.display="0";S.curCat=0;S.showReceipt=false;S.receiptImage=null;S.sellPrice="";S.editingEntry=null;
 S.carInfo=normCarInfo(null);
 S.expandedCar=S.warehouse[0].id;saveDraft();render();
-setTimeout(()=>document.getElementById(status==="estimate"?"est-section":"wh-section")?.scrollIntoView({behavior:"smooth"}),150)}
+setTimeout(()=>document.getElementById(status==="estimate"?"est-section":status==="transit"?"transit-section":"wh-section")?.scrollIntoView({behavior:"smooth"}),150)}
 function addToWH(){saveCalcAs("stock")}
 function addEstimate(){saveCalcAs("estimate")}
+function addTransit(){saveCalcAs("transit")}
 // Прикидка стала реальной покупкой: дата покупки = сегодня (прикидка могла висеть неделями,
 // а возраст стока и «заморожено» должны считаться от покупки; дату можно поправить в ПРАВКЕ)
 function estToStock(id){const car=S.warehouse.find(c=>c.id===id);if(!car||car.status!=="estimate")return;
@@ -32,6 +34,37 @@ addHist(car,"edited","прикидка → на склад");
 touch(car);saveWH();cloudUpsert(car);render();
 showToast("Машина на складе","Отменить",()=>{const c=S.warehouse.find(x=>x.id===id);if(!c)return;
 c.status="estimate";c.date=oldDate;touch(c);saveWH();cloudUpsert(c);render()})}
+
+// Прикидка → в пути: машину купил, едет. Дата = момент отправки; заводим метку напоминания.
+function estToTransit(id){const car=S.warehouse.find(c=>c.id===id);if(!car||car.status!=="estimate")return;
+S.rateApply=null;const oldDate=car.date;
+car.status="transit";car.date=new Date().toISOString();car.transitCheckAt=car.date;
+addHist(car,"edited","прикидка → в пути");
+touch(car);saveWH();cloudUpsert(car);render();
+showToast("Машина в пути","Отменить",()=>{const c=S.warehouse.find(x=>x.id===id);if(!c)return;
+c.status="estimate";c.date=oldDate;c.transitCheckAt=null;touch(c);saveWH();cloudUpsert(c);render()})}
+
+// В пути → на склад: машина пришла. Дата покупки/поступления = сегодня (дальше как обычный сток).
+function transitToStock(id){const car=S.warehouse.find(c=>c.id===id);if(!car||car.status!=="transit")return;
+S.rateApply=null;const oldDate=car.date,oldCheck=car.transitCheckAt;
+car.status="stock";car.date=new Date().toISOString();car.transitCheckAt=null;
+addHist(car,"edited","в пути → на склад (пришла)");
+touch(car);saveWH();cloudUpsert(car);render();
+showToast("Машина пришла — на складе","Отменить",()=>{const c=S.warehouse.find(x=>x.id===id);if(!c)return;
+c.status="transit";c.date=oldDate;c.transitCheckAt=oldCheck;touch(c);saveWH();cloudUpsert(c);render()})}
+
+// Еженедельное напоминание (в приложении, при открытии): для машин «в пути» старше недели с последней
+// отметки спрашиваем «пришла или ещё в пути?». Очередь — по одной машине.
+function checkTransitReminders(){
+const WEEK=7*864e5;
+const due=S.warehouse.filter(c=>c.status==="transit"&&Date.now()-(Date.parse(c.transitCheckAt||c.date)||0)>=WEEK);
+askTransit(due,0)}
+function askTransit(list,i){if(!list||i>=list.length)return;
+const car=list[i];const days=Math.max(0,Math.floor((Date.now()-(Date.parse(car.date)||Date.now()))/864e5));
+showConfirm(`🚚 «${car.name}» в пути уже ${days} дн. Машина пришла или ещё едет?`,
+()=>{transitToStock(car.id);setTimeout(()=>askTransit(list,i+1),120)},
+()=>{const c=S.warehouse.find(x=>x.id===car.id);if(c&&c.status==="transit"){c.transitCheckAt=new Date().toISOString();touch(c);saveWH();cloudUpsert(c)}setTimeout(()=>askTransit(list,i+1),120)},
+{yes:"✅ Пришла",no:"🚚 Ещё в пути",yesClass:"btn-green"})}
 
 function startSell(id){S.sellingCarId=id;S.editingCarId=null;S.sellEditMode=false;S.clientQuote=null;S.rateApply=null;S.sellFormPrice="";S.sellFormCurr="RUB";
 S.sellFormRate="";S.sellFormDate=todayStr();render()}
@@ -422,6 +455,13 @@ h+=rateApplyHTML("estimate");
 h+=est.map(c=>carCardHTML(c)).join("");
 return h}
 
+function transitHTML(){
+const tr=S.warehouse.filter(c=>c.status==="transit");
+if(!tr.length)return ""; // нет машин в пути — секцию не показываем
+let h=`<div class="section-divider transit" id="transit-section"><span>🚚 В пути (${tr.length})</span></div>`;
+h+=tr.map(c=>carCardHTML(c)).join("");
+return h}
+
 function soldHTML(){
 const sld=S.warehouse.filter(c=>c.status==="sold");
 const tp=sld.reduce((s,c)=>s+carProfit(c),0);
@@ -451,7 +491,7 @@ const rateChip=carRateChipHTML(car); // зафиксированный за по
 const mk=cost>0?marketRates():null; // справочный эквивалент цены в валюте по рыночному курсу банка
 let h=`<div class="wh-card ${car.status==="sold"?"sold":""}"><div class="wh-card-header" onclick="togExp('${esc(car.id)}')">
 <div style="min-width:0"><div class="wh-car-name">🚗 ${esc(car.name)}</div>
-<div class="wh-card-sub"><span class="wh-status ${car.status}">${car.status==="stock"?"СКЛАД":car.status==="estimate"?"ПРИКИДКА":"ПРОДАНО"}</span><span>${dShort(car.date)}${car.status==="stock"?staleDaysHTML(car):""}</span></div>
+<div class="wh-card-sub"><span class="wh-status ${car.status}">${car.status==="stock"?"СКЛАД":car.status==="estimate"?"ПРИКИДКА":car.status==="transit"?"В ПУТИ":"ПРОДАНО"}</span><span>${dShort(car.date)}${car.status==="stock"?staleDaysHTML(car):""}</span></div>
 ${(()=>{const vin=car.info&&car.info.vin?`<span class="wh-vin-chip"># ${esc(car.info.vin)}</span>`:"",cols=car.info&&carColorsHTML(car.info,false)?`<span class="wh-meta-colors">${carColorsHTML(car.info,false)}</span>`:"";
 return(vin||cols)?`<div class="wh-card-meta">${vin}${cols}</div>`:""})()}</div>
 <div style="text-align:right"><div class="wh-car-cost">${fmt(cost)} ₽</div>
@@ -567,11 +607,13 @@ h+=`<div class="wh-actions">`;
 // ИЕРАРХИЯ: одно золотое действие-деньги (продать/на склад/цена) во всю ширину; остальное — стальные призраки; удаление — красный контур
 if(car.status==="stock"){h+=`<div class="btn-action btn-primary" title="Оформить продажу" onclick="event.stopPropagation();startSell('${esc(car.id)}')">💰 ПРОДАТЬ</div>`}
 if(car.status==="estimate"){h+=`<div class="btn-action btn-primary" title="Купил — перевести на склад (дата покупки станет сегодняшней)" onclick="event.stopPropagation();estToStock('${esc(car.id)}')">🏭 НА СКЛАД</div>`}
+if(car.status==="transit"){h+=`<div class="btn-action btn-primary" title="Машина пришла — перевести на склад (дата поступления = сегодня)" onclick="event.stopPropagation();transitToStock('${esc(car.id)}')">✅ ПРИШЛА</div>`}
 if(car.status==="sold"){h+=`<div class="btn-action btn-primary" title="Изменить цену или дату продажи" onclick="event.stopPropagation();startEditSale('${esc(car.id)}')">💰 ЦЕНА</div>`}
+if(car.status==="estimate"){h+=`<div class="btn-action btn-ghost g-amber" title="Купил, машина едет — отметить «в пути»" onclick="event.stopPropagation();estToTransit('${esc(car.id)}')">🚚 В ПУТИ</div>`}
 h+=`<div class="btn-action btn-ghost g-blue" title="Название, дата, курсы и суммы" onclick="event.stopPropagation();startCarEdit('${esc(car.id)}')">✏️ ПРАВКА</div>`;
 if(car.status!=="sold"){h+=`<div class="btn-action btn-ghost g-violet" title="Скопировать расчёт в калькулятор" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋 В КАЛЬКУЛЯТОР</div>`}
 else{h+=`<div class="btn-action btn-ghost g-violet" title="Вернуть на склад" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
-if(car.status!=="estimate")h+=`<div class="btn-action btn-ghost g-green" title="Чек с ценой для клиента — БЕЗ себестоимости" onclick="event.stopPropagation();${car.status==="sold"?"carClientShare":"openClientQuote"}('${esc(car.id)}')">👤 ЧЕК КЛИЕНТУ</div>`;
+if(car.status==="stock"||car.status==="sold")h+=`<div class="btn-action btn-ghost g-green" title="Чек с ценой для клиента — БЕЗ себестоимости" onclick="event.stopPropagation();${car.status==="sold"?"carClientShare":"openClientQuote"}('${esc(car.id)}')">👤 ЧЕК КЛИЕНТУ</div>`;
 h+=`
 <div class="btn-action btn-ghost g-amber" title="Скачать внутренний чек (с себестоимостью)" onclick="event.stopPropagation();carReceipt('${esc(car.id)}')">⬇️ ЧЕК СЕБЕ</div>
 <div class="btn-action btn-danger" title="Удалить машину" onclick="event.stopPropagation();delCar('${esc(car.id)}')">🗑 УДАЛИТЬ</div></div>`;

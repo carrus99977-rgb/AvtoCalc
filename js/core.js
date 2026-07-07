@@ -231,7 +231,7 @@ function normalizeCar(c){
 if(!c||typeof c!=="object")return null;
 const entries=(Array.isArray(c.entries)?c.entries:[]).map(normalizeEntry).filter(Boolean);
 if(!entries.length)return null;
-const status=c.status==="sold"?"sold":c.status==="estimate"?"estimate":"stock";
+const status=c.status==="sold"?"sold":c.status==="estimate"?"estimate":c.status==="transit"?"transit":"stock";
 const rates=safeRates(c.rates)||{EUR:numStr(c.eurRate),USD:numStr(c.usdRate)};
 // ВАЖНО: не выбрасываем валютную позицию без курса и не роняем из-за неё машину —
 // normalizeCar гоняется на каждом старте, легаси-машина (старые версии без валидации
@@ -243,6 +243,8 @@ name:(typeof c.name==="string"?c.name:String(c.name||"Без названия"))
 date:(()=>{const d=new Date(c.date);return isNaN(d)?new Date().toISOString():d.toISOString()})(),
 rates,eurRate:String(rates.EUR||""),usdRate:String(rates.USD||""),
 entries,status,
+// метка «в пути»: когда последний раз спрашивали «пришла?» (для еженедельного напоминания при открытии)
+transitCheckAt:(()=>{if(status!=="transit"||!c.transitCheckAt)return null;const d=new Date(c.transitCheckAt);return isNaN(d)?null:d.toISOString()})(),
 sellPrice:status==="sold"?numStr(c.sellPrice):"",
 // валюта продажи — только буквенный код 2-6 симв. (как у позиций): отсекает инъекцию
 // в инлайн-onclick формы продажи (esc не экранирует одинарные кавычки), мусор → RUB
@@ -305,11 +307,12 @@ return Date.now()-last>7*86400000}
 
 // ===== CONFIRM =====
 // onCancel (необязателен) зовётся при любом закрытии без «ДА»: кнопка ОТМЕНА или клик по фону
-function showConfirm(msg,fn,onCancel){S.confirmAction={msg,fn,onCancel};renderConfirm()}
+// opts (необяз.): {yes,no,yesClass} — кастомные подписи/цвет кнопок (по умолч. ДА/ОТМЕНА, красная)
+function showConfirm(msg,fn,onCancel,opts){S.confirmAction={msg,fn,onCancel,opts:opts||null};renderConfirm()}
 function hideConfirm(){const c=S.confirmAction;S.confirmAction=null;renderConfirm();if(c&&c.onCancel)c.onCancel()}
 function confirmYes(){const c=S.confirmAction;S.confirmAction=null;renderConfirm();if(c&&c.fn)c.fn()}
 function renderConfirm(){const el=document.getElementById("confirm-dialog");if(!S.confirmAction){el.innerHTML="";return}
 el.innerHTML=`<div class="confirm-overlay" onclick="hideConfirm()"><div class="confirm-box" onclick="event.stopPropagation()">
 <p>${esc(S.confirmAction.msg)}</p><div class="confirm-btns">
-<div class="btn-action btn-outline" onclick="hideConfirm()">ОТМЕНА</div>
-<div class="btn-action btn-red" onclick="confirmYes()">ДА</div></div></div></div>`}
+<div class="btn-action btn-outline" onclick="hideConfirm()">${esc((S.confirmAction.opts&&S.confirmAction.opts.no)||"ОТМЕНА")}</div>
+<div class="btn-action ${(S.confirmAction.opts&&S.confirmAction.opts.yesClass)||"btn-red"}" onclick="confirmYes()">${esc((S.confirmAction.opts&&S.confirmAction.opts.yes)||"ДА")}</div></div></div></div>`}

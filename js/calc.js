@@ -209,9 +209,10 @@ ${e.currency!=="RUB"?`<div class="entry-rub">≈ ${fmt(entryRub(e,S.rates))} ₽
 h+=`<div style="padding:0 12px 8px;display:flex;gap:8px">
 <div class="btn-action btn-yellow" style="flex:1;margin:0" onclick="printR()">🧾 ЧЕК</div>
 <div class="btn-action btn-red" style="flex:1;margin:0" title="Стереть название, позиции и цену продажи (курсы останутся)" onclick="clearCalc()">🗑 ОЧИСТИТЬ</div></div>
-<div style="padding:0 12px 12px;display:flex;gap:8px">
-<div class="btn-action btn-blue" style="flex:1;margin:0" title="Сохранить как прикидку — не склад, не считается в заморожено" onclick="addEstimate()">📝 В ПРИКИДКИ</div>
-<div class="btn-action btn-green" style="flex:1;margin:0" onclick="addToWH()">🏭 НА СКЛАД</div></div></div>`;
+<div style="padding:0 12px 12px;display:flex;gap:6px">
+<div class="btn-action btn-blue" style="flex:1;margin:0" title="Сохранить как прикидку — не склад, не считается в заморожено" onclick="addEstimate()">📝 ПРИКИДКА</div>
+<div class="btn-action btn-yellow" style="flex:1;margin:0" title="Купил, машина едет — раздел «В пути» с еженедельным напоминанием" onclick="addTransit()">🚚 В ПУТИ</div>
+<div class="btn-action btn-green" style="flex:1;margin:0" onclick="addToWH()">🏭 СКЛАД</div></div></div>`;
 
 h+=`<div class="profit-box"><div class="coll-header" onclick="S.showProfit=!S.showProfit;render()">
 <span>📊 Расчёт прибыли</span><span class="coll-arrow" style="transform:rotate(${S.showProfit?180:0}deg)">▾</span></div>
