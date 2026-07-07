@@ -64,7 +64,10 @@ function renderCbrInfo(){const el=document.getElementById("cbr-info");if(el)el.t
 // Курс ПРОДАЖИ Камкомбанка: сколько ₽ стоит 1 $/€ при покупке валюты в банке — по нему
 // перекуп реально платит за машины. Серверная функция на Vercel поверх публичного API
 // банка (backbron.kamkombank.ru). Истории нет — курс «сейчас».
-const MARKET_API="https://avto-calc.vercel.app/api/market";
+// Прокси /api/* всегда с ТОГО ЖЕ origin: локально их отдаёт dev-server.js, в проде — Vercel-функции
+// из папки api/ (едут вместе с приложением). Так любой форк на своём Vercel бьёт в СВОЙ прокси, а не в чужой.
+const _API_BASE="";
+const MARKET_API=_API_BASE+"/api/market";
 let _mkCache=null; // {usd, src, ts} — прогретый рыночный курс
 // Текущий рыночный курс для СПРАВОЧНОГО пересчёта ₽ → $/€ (строки «≈ в валюте» на карточках).
 // Поля курсов и зафиксированные позиции не трогает. null — курс не загружен (офлайн)
@@ -100,7 +103,8 @@ S.rates.USD=String(Math.round(d.usd*1e4)/1e4);
 if(d.eur>0)S.rates.EUR=String(Math.round(d.eur*1e4)/1e4); // евро тоже рыночный (продажа); если нет — не трогаем
 S.cbrDate=""; // рыночный курс — только текущий момент
 const t=new Date(d.ts||Date.now()).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
-const eurTxt=d.eur>0?` · € ${fmtRate(d.eur)}`:"";
+// евро в ответе банка нет: не молчим — если EUR активна, её курс остался прежним (возможно, устаревшим)
+const eurTxt=d.eur>0?` · € ${fmtRate(d.eur)}`:(S.activeCur.includes("EUR")?" · € не обновлён (нет в ответе банка)":"");
 S.cbrInfo=`✓ ${d.src||"Камкомбанк (продажа)"} ${t} · $ ${fmtRate(d.usd)}${eurTxt} ₽`;
 saveDraft();render()}
 
@@ -114,6 +118,32 @@ const d=await loadMarketShared();
 S.cbrBusy=false;applyMarket(d)}
 catch(e){S.cbrBusy=false;
 S.cbrInfo="⚠ Курс банка недоступен — попробуй ещё раз, жми «КУРС ЦБ» или введи вручную";renderCbrInfo()}}
+
+// ===== КУРС USDT/₽ (биржа ABCEX, через прокси на Vercel) =====
+// USDT/₽ = эффективный курс доллара для перекупа (покупает USDT за ₽, платит им за машины). Кладём в поле USD.
+// Публичный API биржи (цена последней сделки по паре USDTRUB), без ключа — серверная функция api/usdt.js.
+const USDT_API=_API_BASE+"/api/usdt";
+async function loadUsdtData(){
+const r=await fetch(USDT_API,{signal:AbortSignal.timeout(12000)});
+if(!r.ok)throw new Error("usdt http "+r.status);
+const d=await r.json();const v=parseFloat(d&&d.usdt);
+if(!(v>0))throw new Error("нет курса USDT");
+return{usdt:v,src:d.src||"ABCEX (USDT/₽)",tradeAt:d.tradeAt||null,ts:d.ts||Date.now()}}
+function applyUsdt(d){
+S.rates.USD=String(Math.round(d.usdt*1e4)/1e4); // курс USDT → в поле USD (как просил)
+S.cbrDate="";
+const t=new Date(d.ts||Date.now()).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+// цена = последняя сделка; на тонком рынке она может быть несвежей — предупреждаем, если старше 30 мин
+let warn="";const ta=d.tradeAt?Date.parse(d.tradeAt):NaN;
+if(isFinite(ta)&&Date.now()-ta>18e5){const tt=new Date(ta).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});warn=` ⚠ последняя сделка ${tt}`}
+S.cbrInfo=`✓ ${d.src||"ABCEX (USDT/₽)"} ${t} · $ ${fmtRate(d.usdt)} ₽ (в поле USD)${warn}`;
+saveDraft();render()}
+async function fetchUsdt(){
+if(S.cbrBusy)return;
+S.cbrBusy=true;S.cbrInfo="⏳ Загрузка курса USDT...";renderCbrInfo();
+try{const d=await loadUsdtData();S.cbrBusy=false;applyUsdt(d)}
+catch(e){S.cbrBusy=false;
+S.cbrInfo="⚠ Курс USDT недоступен — попробуй ещё раз, жми «🏦 РЫНОК»/«КУРС ЦБ» или введи вручную";renderCbrInfo()}}
 
 // ===== ТИХИЙ ПРОГРЕВ ПРИ ЗАПУСКЕ =====
 // К моменту нажатия кнопок ответы уже готовы: кнопки срабатывают мгновенно,

@@ -23,12 +23,23 @@ editingEntry:null,editValue:"",editCurr:"RUB",editRate:"",
 editingCarId:null,editCarEntries:null,bulkRates:{},editName:"",editDate:"",editAskPrice:"",editNote:"",editInfo:null,targetMarkup:"",
 cbrBusy:false,cbrDate:"",cbrInfo:"",
 toast:null,backupHidden:false,statScope:"all",chartCat:null,listBuilder:null,
-carReceipts:{},confirmAction:null};
+carReceipts:{},confirmAction:null,colorOpen:null,clientQuote:null,rateApply:null};
 
 // ===== PERSISTENCE =====
+// _whBlockOverwrite — склад не загрузился и сырой резерв НЕ удалось сохранить: блокируем saveWH,
+// чтобы не затереть единственную (повреждённую, но восстановимую) копию пустым складом.
+let _whBlockOverwrite=false,_whSaveWarned=false;
 function loadAll(){
 try{const w=localStorage.getItem("autoCalc_wh");if(w){const arr=JSON.parse(w);
-S.warehouse=(Array.isArray(arr)?arr:[]).map(normalizeCar).filter(Boolean)}}catch(e){}
+S.warehouse=(Array.isArray(arr)?arr:[]).map(normalizeCar).filter(Boolean)}}
+catch(e){
+// весь blob не распарсился (повреждён): НЕ молчим и НЕ даём следующему saveWH() затереть сырые
+// данные пустым []. Сохраняем сырую копию один раз и предупреждаем — есть шанс на восстановление.
+let backedUp=false;
+try{if(localStorage.getItem("autoCalc_wh_corrupt"))backedUp=true;
+else{const raw=localStorage.getItem("autoCalc_wh");if(raw){localStorage.setItem("autoCalc_wh_corrupt",raw);backedUp=true}else backedUp=true}}catch(_){}
+if(!backedUp)_whBlockOverwrite=true; // резерв не записался (напр. память переполнена) → не даём saveWH затереть сырьё
+setTimeout(()=>{try{alert("Не удалось прочитать сохранённый склад — данные повреждены. Сырая копия сохранена в резерв. Не делайте новых изменений и экспорта до восстановления.")}catch(_){}},0)}
 try{const d=localStorage.getItem("autoCalc_draft");if(d){const dd=JSON.parse(d);
 S.carName=dd.carName||"";
 // миграция со старого формата (eurRate/usdRate) на карту курсов
@@ -39,7 +50,10 @@ S.curCat=dd.curCat||0;S.sellPrice=dd.sellPrice||"";S.targetMarkup=dd.targetMarku
 S.carInfo=normCarInfo(dd.carInfo);
 S.sellCurrency=CUR[dd.sellCurrency]?dd.sellCurrency:"RUB"}}catch(e){}
 }
-function saveWH(){try{localStorage.setItem("autoCalc_wh",JSON.stringify(S.warehouse))}catch(e){}}
+function saveWH(){if(_whBlockOverwrite)return; // склад повреждён и резерв не сохранён — не затираем сырьё
+try{localStorage.setItem("autoCalc_wh",JSON.stringify(S.warehouse))}
+catch(e){ // память браузера переполнена — НЕ молчим (иначе изменения тихо теряются при перезагрузке)
+if(!_whSaveWarned){_whSaveWarned=true;setTimeout(()=>{try{alert("Не удалось сохранить склад — память браузера переполнена. Сделайте ЭКСПОРТ базы и освободите место, иначе изменения потеряются при перезагрузке.")}catch(_){}},0)}}}
 function saveDraft(){try{localStorage.setItem("autoCalc_draft",JSON.stringify({
 carName:S.carName,rates:S.rates,activeCur:S.activeCur,
 eurRate:S.rates.EUR,usdRate:S.rates.USD,
@@ -52,7 +66,7 @@ try{const saved=localStorage.getItem("autoCalc_theme");
 S.theme=saved||(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark")}catch(e){}
 function applyTheme(){document.body.classList.toggle("light",S.theme==="light");
 const mt=document.querySelector('meta[name="theme-color"]');
-if(mt)mt.setAttribute("content",S.theme==="light"?"#eef0f5":"#1a1a2e")}
+if(mt)mt.setAttribute("content",S.theme==="light"?"#f1ede6":"#131110")}
 function toggleTheme(){S.theme=S.theme==="light"?"dark":"light";
 try{localStorage.setItem("autoCalc_theme",S.theme)}catch(e){}
 applyTheme();render()}
@@ -91,18 +105,28 @@ const n=parseFloat(s);
 return isFinite(n)&&Math.abs(n)<=1e12?n:NaN}
 // Каноничная строка для хранения: "83,45" → "83.45", мусор → "" (всегда точка)
 function numStr(v){const n=parseNum(v);return isFinite(n)?String(n):""}
+// Целые рубли из ПОЛЬЗОВАТЕЛЬСКОГО ввода цены: убираем все разделители (пробелы/запятые/точки-тысячные) → целое.
+// Для денежных полей (цена клиенту, +₽) копейки не нужны, а «500,000» должно значить 500 000, а не 500
+// (в отличие от parseNum, где одиночная запятая — десятичная). НЕ применять к каноничным строкам с точкой-десятичной.
+function parseRub(v){const s=String(v==null?"":v).replace(/[^\d]/g,"");if(!s)return NaN;const n=parseInt(s,10);return isFinite(n)&&n<=1e12?n:NaN}
 // ===== ИСТОРИЯ ИЗМЕНЕНИЙ ПО МАШИНЕ (ключевые события) =====
-const HIST_EV=["created","edited","sold","priceEdit","returned"];
+const HIST_EV=["created","edited","sold","priceEdit","returned","quoted"];
 const HIST_META={
 created:{icon:"🏭",label:"Создана"},
 edited:{icon:"✏️",label:"Изменены данные"},
 sold:{icon:"💰",label:"Продана"},
 priceEdit:{icon:"📈",label:"Изменена продажа"},
-returned:{icon:"↩️",label:"Возврат на склад"}};
+returned:{icon:"↩️",label:"Возврат на склад"},
+quoted:{icon:"📤",label:"Отправлен чек клиенту"}};
 // добавить событие в историю машины (с обрезкой текста и лимитом 50)
 function addHist(car,e,d){if(!car)return;if(!Array.isArray(car.history))car.history=[];
 car.history.push({t:new Date().toISOString(),e:String(e),d:d?String(d).slice(0,120):""});
 if(car.history.length>50)car.history=car.history.slice(-50)}
+// Запись «отправлен чек клиенту» с дедупом одинаковых подряд (защита от двойного тапа/повторной отправки той же цены).
+// true — событие добавлено (нужно сохранить), false — дубль последнего, пропущено.
+function pushQuoteHist(car,price){if(!car)return false;const d=fmt(price)+" ₽";
+const h=Array.isArray(car.history)?car.history:[];const last=h[h.length-1];
+if(last&&last.e==="quoted"&&last.d===d)return false;addHist(car,"quoted",d);return true}
 // список событий для показа (по возрастанию t); старым машинам синтезируем «создана» из даты
 function carHistory(car){
 const h=(Array.isArray(car.history)?car.history:[]).filter(x=>x&&x.t&&HIST_EV.includes(x.e)).slice();
@@ -134,19 +158,59 @@ return{symbol:safe,cls:"",label:safe,cbr:null}}
 // VIN — ВНУТРЕННЕЕ поле: хранится в карточке, виден менеджеру, в клиентский чек не попадает.
 // Чистка: латиница (без I/O/Q по стандарту, но не отсекаем — бывают frame numbers), цифры, дефис.
 function normVin(v){return String(v==null?"":v).toUpperCase().replace(/[^A-Z0-9-]/g,"").slice(0,20)}
+// ЦВЕТА КУЗОВА/САЛОНА — теперь HEX (#rrggbb), выбираются кружками-свотчами + палитрой RGB (не текст).
+// Пресеты частых автоцветов для свотчей:
+const CAR_COLORS=["#eeeeee","#1c1c1e","#c4c8cc","#74787d","#3a3d42","#23407a","#4c7cc4",
+"#b41e1e","#6e1a24","#1f6b3a","#5a3a22","#d8c8a8","#c9a84a","#d2691e"];
+// Миграция старых ТЕКСТОВЫХ цветов (из прежних версий/импорта) в HEX
+const COLOR_NAMES={"белый":"#eeeeee","чёрный":"#1c1c1e","черный":"#1c1c1e","серебристый":"#c4c8cc","серебро":"#c4c8cc",
+"серый":"#74787d","графит":"#3a3d42","тёмно-серый":"#3a3d42","темно-серый":"#3a3d42","антрацит":"#3a3d42",
+"синий":"#23407a","голубой":"#4c7cc4","красный":"#b41e1e","бордовый":"#6e1a24","вишнёвый":"#6e1a24","вишневый":"#6e1a24",
+"зелёный":"#1f6b3a","зеленый":"#1f6b3a","коричневый":"#5a3a22","бежевый":"#d8c8a8","коньяк":"#d8c8a8",
+"золотой":"#c9a84a","песочный":"#c9a84a","оранжевый":"#d2691e","жёлтый":"#e3b505","желтый":"#e3b505"};
+// нормализация цвета: HEX как есть (#rgb→#rrggbb), иначе миграция известного названия, иначе "" (не выбран)
+function normColor(v){if(typeof v!=="string")return"";v=v.trim();
+if(/^#[0-9a-fA-F]{6}$/.test(v))return v.toLowerCase();
+if(/^#[0-9a-fA-F]{3}$/.test(v))return("#"+v[1]+v[1]+v[2]+v[2]+v[3]+v[3]).toLowerCase();
+return COLOR_NAMES[v.toLowerCase()]||""}
+// «свой» цвет = валидный, но не из пресетов (для подсветки кнопки палитры)
+function isCustomColor(hex){return !!hex&&CAR_COLORS.indexOf(hex)<0}
+// один залитый кружок для HTML (карточка, HTML-чек)
+function colorDot(hex){return hex?`<span style="display:inline-block;width:13px;height:13px;border-radius:50%;background:${esc(hex)};border:1px solid rgba(128,128,128,.55);vertical-align:middle;margin-left:4px"></span>`:""}
+// подпись+кружок кузова и салона: full=«Цвет кузова:», иначе коротко «Кузов»
+function carColorsHTML(ci,full){if(!ci||(!ci.body&&!ci.inter))return"";
+const L=full?["Цвет кузова:","Цвет салона:"]:["Кузов","Салон"];const parts=[];
+if(ci.body)parts.push(`${esc(L[0])}${colorDot(ci.body)}`);
+if(ci.inter)parts.push(`${esc(L[1])}${colorDot(ci.inter)}`);
+return parts.join('<span style="display:inline-block;width:14px"></span>')}
+// Пикер цвета: ряд пресет-кружков + «🎨» (нативная RGB-палитра) + «✕» сброс.
+// field — "body"/"inter"; cur — текущий HEX; fn — имя функции-сеттера ("setCalcColor"/"setEditColor").
+// onchange у палитры (не oninput): render рушит нативный пикер, а change стреляет при его закрытии.
+function openColor(key){S.colorOpen=key;render()}
+function colorPickerHTML(field,cur,fn,key){
+// цвет выбран и пикер не раскрыт → свёрнуто: только выбранный кружок + «изменить» + сброс
+if(cur&&S.colorOpen!==key)return `<div class="swatch-row">
+<div class="swatch sel" style="background:${esc(cur)}" title="Изменить цвет" onclick="openColor('${key}')"></div>
+<div class="swatch-change" onclick="openColor('${key}')">изменить</div>
+<div class="swatch-clear" title="Сбросить цвет" onclick="${fn}('${field}','')">✕</div></div>`;
+// раскрыто (цвет не выбран или нажали «изменить») → вся палитра
+return `<div class="swatch-row">
+${CAR_COLORS.map(hex=>`<div class="swatch${cur===hex?" sel":""}" style="background:${hex}" onclick="${fn}('${field}','${hex}')"></div>`).join("")}
+<label class="swatch swatch-custom${isCustomColor(cur)?" sel":""}"${isCustomColor(cur)?` style="background:${esc(cur)}"`:""}><input type="color" value="${esc(cur||"#888888")}" onchange="${fn}('${field}',this.value)">🎨</label>
+${cur?`<div class="swatch-clear" title="Сбросить цвет" onclick="${fn}('${field}','')">✕</div>`:""}</div>`}
 function normCarInfo(o){o=o&&typeof o==="object"?o:{};
 const yr=parseInt(o.year,10);
 return{vin:normVin(o.vin),
 year:(yr>=1950&&yr<=2100)?String(yr):"",
-body:typeof o.body==="string"?o.body.slice(0,40):"",
-inter:typeof o.inter==="string"?o.inter.slice(0,40):"",
+body:normColor(o.body),
+inter:normColor(o.inter),
 vol:typeof o.vol==="string"?o.vol.slice(0,10):(typeof o.vol==="number"&&isFinite(o.vol)?String(o.vol):""),
 trim:typeof o.trim==="string"?o.trim.slice(0,80):""}}
-// строка характеристик для чеков/карточки: «2023 г · 3.5 л · белый · салон бежевый» (пустое пропускаем)
+// строка характеристик для чеков/карточки: «2023 г · 3.5 л» (цвета теперь отдельно кружками — см. carColorsHTML)
 function carSpecsStr(ci){if(!ci)return"";
 const v=parseNum(ci.vol);
 const volTxt=ci.vol?(v>0?(v<=12?fmtD(v,v%1?1:0)+" л":fmt(v)+" см³"):ci.vol):"";
-return[ci.year?ci.year+" г.":"",volTxt,ci.body||"",ci.inter?"салон "+ci.inter:""].filter(Boolean).join(" · ")}
+return[ci.year?ci.year+" г.":"",volTxt].filter(Boolean).join(" · ")}
 
 // ===== ВАЛИДАЦИЯ ВХОДЯЩИХ ДАННЫХ (импорт и облако) =====
 // Любая машина из файла/облака проходит через normalizeCar: лишние поля
@@ -199,7 +263,9 @@ const t=(typeof h.t==="string")?(()=>{const d=new Date(h.t);return isNaN(d)?"":d
 if(!t)return null;
 return{t,e,d:typeof h.d==="string"?h.d.slice(0,120):""}}).filter(Boolean).slice(-50),
 // метка свежести → канон. UTC Z-форма, чтобы строковое сравнение в слиянии было хронологически верным
-updatedAt:(()=>{const s=c.updatedAt;if(typeof s!=="string"||!s)return"";const d=new Date(s);return isNaN(d)?"":d.toISOString()})()}}
+updatedAt:(()=>{const s=c.updatedAt;if(typeof s==="string"&&s){const d=new Date(s);if(!isNaN(d))return d.toISOString()}
+// легаси/импорт без метки свежести → берём дату создания, иначе localTs='' и ЛЮБОЕ надгробие удалит машину при слиянии
+const dd=new Date(c.date);return isNaN(dd)?new Date().toISOString():dd.toISOString()})()}}
 // Карта курсов машины: новый формат — car.rates, старый — eurRate/usdRate
 function carRates(car){return car.rates||{EUR:car.eurRate,USD:car.usdRate}}
 function carSellRates(car){const r={...carRates(car)};

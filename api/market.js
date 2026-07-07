@@ -34,7 +34,7 @@ module.exports = async (req, res) => {
   try {
     const r = await fetch(KKB_URL, {
       signal: AbortSignal.timeout(12000),
-      headers: { "User-Agent": "AvtoCalc/1.0 (+https://avto-calc.vercel.app)" },
+      headers: { "User-Agent": "AvtoCalc/1.0" },
     });
     if (!r.ok) throw new Error("kamkombank http " + r.status);
     const data = await r.json();

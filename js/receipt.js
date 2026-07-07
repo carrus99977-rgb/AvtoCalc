@@ -6,6 +6,7 @@ let h=`<div class="receipt-wrap animate" id="receipt-section"><div class="receip
 <div class="receipt-title"><h2>★ АВТО КАЛЬКУЛЯТОР ★</h2><div class="r-sub">РАСЧЁТ СЕБЕСТОИМОСТИ</div>
 ${cn.trim()?`<div class="r-car">🚗 ${esc(cn.trim().toUpperCase())}</div>`:""}
 ${(sp=>sp?`<div class="r-sub">${esc(sp)}</div>`:"")(carSpecsStr(S.carInfo))}
+${carColorsHTML(S.carInfo,true)?`<div class="r-sub">${carColorsHTML(S.carInfo,true)}</div>`:""}
 ${S.carInfo.trim?`<div class="r-sub">Комплектация: ${esc(S.carInfo.trim)}</div>`:""}
 <div class="r-date">${ds()}</div><div class="r-dash"></div></div>`;
 entries.forEach(e=>{const cm=curInfo(e.currency),r=entryRate(e,rates),rv=entryRub(e,rates);
@@ -31,6 +32,20 @@ return h}
 // названия/подписи не вылезали за край чека и не наезжали на сумму
 function fitText(cx,s,maxW){s=String(s==null?"":s);if(cx.measureText(s).width<=maxW)return s;
 const e="…";while(s.length>0&&cx.measureText(s+e).width>maxW)s=s.slice(0,-1);return s+e}
+// элементы цвета для canvas-чека: [{label,hex}] (кузов, салон) — только заполненные
+function colorItems(ci){const it=[];if(ci&&ci.body)it.push({label:"Цвет кузова:",hex:ci.body});
+if(ci&&ci.inter)it.push({label:"Цвет салона:",hex:ci.inter});return it}
+// центрированная строка «Цвет кузова: ●  Цвет салона: ●» на canvas (шрифт/цвет подписи задаём здесь).
+// сохраняем/восстанавливаем textAlign+baseline — вокруг строки идёт центрированная вёрстка шапки чека
+function drawColorRow(cx,mx,yc,items){const R=5,gapLbl=7,gapItem=20;
+const pB=cx.textBaseline,pA=cx.textAlign;cx.textBaseline="middle";cx.font="10px 'Courier New',monospace";
+const w=items.map(it=>cx.measureText(it.label).width+gapLbl+R*2);
+const total=w.reduce((s,x)=>s+x,0)+gapItem*(items.length-1);let x=mx-total/2;
+items.forEach((it,i)=>{cx.textAlign="left";cx.fillStyle="#666";cx.fillText(it.label,x,yc);
+const dotX=x+cx.measureText(it.label).width+gapLbl+R;
+cx.beginPath();cx.arc(dotX,yc,R,0,Math.PI*2);cx.fillStyle=it.hex;cx.fill();
+cx.strokeStyle="rgba(0,0,0,.3)";cx.lineWidth=1;cx.stroke();x+=w[i]+gapItem});
+cx.textBaseline=pB;cx.textAlign=pA}
 function drawReceiptPNG(opts){
 const W=400,sc=2,cv=document.createElement("canvas"),cx=cv.getContext("2d");
 const cost=totR(opts.entries,opts.rates);
@@ -38,8 +53,9 @@ let sellRub=0,profit=0,markup=0,margin=0,hasSell=false;
 if(opts.sell&&parseNum(opts.sell.price)>0){hasSell=true;
 sellRub=toR(parseNum(opts.sell.price),opts.sell.currency,opts.sell.rates);
 profit=sellRub-cost;markup=cost>0?(profit/cost)*100:0;margin=sellRub>0?(profit/sellRub)*100:0}
+const cItems=colorItems({body:opts.bodyColor,inter:opts.interColor});
 let tH=60;if(opts.name)tH+=28;tH+=24+20+16+opts.entries.length*38+20+28;
-if(opts.specs)tH+=15;if(opts.trim)tH+=15;
+if(opts.specs)tH+=15;if(opts.trim)tH+=15;if(cItems.length)tH+=17;
 if(hasSell)tH+=140;tH+=50+30;if(opts.vin)tH+=14;
 cv.width=W*sc;cv.height=tH*sc;cx.scale(sc,sc);cx.fillStyle="#fef9e7";cx.fillRect(0,0,W,tH);
 for(let x=6;x<W;x+=12){cx.beginPath();cx.arc(x,0,3,0,Math.PI*2);cx.fillStyle="#fff";cx.fill()}
@@ -49,6 +65,7 @@ cx.font="11px 'Courier New',monospace";cx.fillStyle="#888";cx.fillText(hasSell?"
 if(opts.name){cx.fillStyle="#2c2c2c";cx.font="bold 14px 'Courier New',monospace";cx.fillText(fitText(cx,opts.name.toUpperCase(),W-2*px),mx,y);y+=22}
 if(opts.specs){cx.font="10px 'Courier New',monospace";cx.fillStyle="#888";cx.fillText(fitText(cx,opts.specs,W-2*px),mx,y);y+=15}
 if(opts.trim){cx.font="10px 'Courier New',monospace";cx.fillStyle="#888";cx.fillText(fitText(cx,"Комплектация: "+opts.trim,W-2*px),mx,y);y+=15}
+if(cItems.length){drawColorRow(cx,mx,y+7,cItems);y+=17}
 cx.font="10px 'Courier New',monospace";cx.fillStyle="#aaa";cx.fillText(ds(),mx,y);y+=18;
 cx.setLineDash([4,3]);cx.strokeStyle="#ccc";cx.lineWidth=1;cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=14;
 cx.setLineDash([]);
@@ -88,12 +105,14 @@ function buildCalcReceiptPNG(){
 const pd=pCalc(totR(S.entries,S.rates));
 return drawReceiptPNG({name:S.carName.trim(),rates:S.rates,entries:S.entries,
 specs:carSpecsStr(S.carInfo),trim:S.carInfo.trim,vin:S.carInfo.vin,
+bodyColor:S.carInfo.body,interColor:S.carInfo.inter,
 sell:pd.sell>0?(pd.byMarkup?{price:String(Math.round(pd.sell)),currency:"RUB",rates:S.rates,byMarkup:true}
-:{price:S.sellPrice,currency:S.sellCurrency,rates:S.rates}):null})}
+:{price:String(parseRub(S.sellPrice)||0),currency:S.sellCurrency,rates:S.rates}):null})}
 function buildCarReceiptPNG(car){
 const ci=car.info||{};
 return drawReceiptPNG({name:car.name,rates:carRates(car),entries:car.entries,
 specs:carSpecsStr(ci),trim:ci.trim,vin:ci.vin,
+bodyColor:ci.body,interColor:ci.inter,
 sell:car.status==="sold"&&parseNum(car.sellPrice)>0?{price:car.sellPrice,currency:car.sellCurrency,
 rates:carSellRates(car)}:null})}
 
@@ -124,36 +143,22 @@ function carReceipt(id){
 const car=S.warehouse.find(c=>c.id===id);if(!car)return;
 const du=buildCarReceiptPNG(car);
 S.carReceipts[id]=du;S.expandedCar=id;downloadPNG(du,car.name);render()}
-function carShare(id){
-const car=S.warehouse.find(c=>c.id===id);if(!car)return;
-shareReceipt(buildCarReceiptPNG(car),car.name)}
 
 // ===== ЧЕК ДЛЯ КЛИЕНТА =====
-// Понятный документ для покупателя: авто (год, цвета, объём, комплектация), из чего
-// складывается цена (группы расходов + комиссия) и итоговая сумма к оплате.
-// БЕЗ VIN (внутреннее поле), без заметок и внутренних меток менеджера.
-// Детальная разбивка — только когда известна финальная цена и комиссия ≥ 0
-// (иначе она раскрыла бы убыток/внутреннюю кухню — печатаем простой прайс-чек).
-const CLIENT_GROUP={car_price:"Автомобиль",logistics:"Доставка",customs:"Таможня и оформление",
-util_fee:"Таможня и оформление",registration:"Таможня и оформление",other:"Прочие расходы"};
-function clientBreakdown(car){
-const cr=carRates(car),sums={};
-car.entries.forEach(e=>{const g=CLIENT_GROUP[e.category]||"Прочие расходы";sums[g]=(sums[g]||0)+entryRub(e,cr)});
-return["Автомобиль","Доставка","Таможня и оформление","Прочие расходы"].filter(g=>sums[g]>0).map(g=>[g,sums[g]])}
+// Понятный документ для покупателя: авто (год, цвета, объём, комплектация) + ИТОГОВАЯ цена.
+// БЕЗ разбивки расходов и комиссии (это внутренняя кухня — клиент видит только финальную сумму),
+// БЕЗ VIN, без заметок и внутренних меток менеджера.
 function drawClientReceiptPNG(car){
 const W=400,sc=2,cv=document.createElement("canvas"),cx=cv.getContext("2d");
 const sold=car.status==="sold";
 const finalP=sold?carSellRub(car):(parseNum(car.askPrice)||0);
-const cost=carCost(car),fee=finalP-cost;
-const detailed=finalP>0&&cost>0&&fee>=0;
 const info=car.info||{},specs=carSpecsStr(info);
-const rows=detailed?clientBreakdown(car):[];
+const cItems=colorItems(info);
 let tH=64;
-if(specs)tH+=16;if(info.trim)tH+=16;
-tH+=16;
-if(detailed)tH+=rows.length*20+(fee>0?20:0)+16+30;
-else tH+=22+36;
-tH+=46;
+if(specs)tH+=16;if(info.trim)tH+=16;if(cItems.length)tH+=18;
+tH+=16;      // строка даты
+tH+=24+40;   // подпись «ЦЕНА ДЛЯ ВАС» + крупная итоговая цена
+tH+=46;      // разделители + звёзды
 cv.width=W*sc;cv.height=tH*sc;cx.scale(sc,sc);cx.fillStyle="#fef9e7";cx.fillRect(0,0,W,tH);
 for(let x=6;x<W;x+=12){cx.beginPath();cx.arc(x,0,3,0,Math.PI*2);cx.fillStyle="#fff";cx.fill()}
 const px=28,rx=W-px,mx=W/2;let y=26;cx.textBaseline="top";
@@ -161,26 +166,22 @@ cx.fillStyle="#2c2c2c";cx.font="bold 16px 'Courier New',monospace";cx.textAlign=
 cx.fillText(fitText(cx,"🚗 "+String(car.name||"").toUpperCase(),W-2*px),mx,y);y+=22;
 if(specs){cx.font="11px 'Courier New',monospace";cx.fillStyle="#666";cx.fillText(fitText(cx,specs,W-2*px),mx,y);y+=16}
 if(info.trim){cx.font="11px 'Courier New',monospace";cx.fillStyle="#666";cx.fillText(fitText(cx,"Комплектация: "+info.trim,W-2*px),mx,y);y+=16}
+if(cItems.length){drawColorRow(cx,mx,y+8,cItems);y+=18}
 cx.font="10px 'Courier New',monospace";cx.fillStyle="#aaa";cx.fillText(ds(),mx,y);y+=16;
-cx.setLineDash([4,3]);cx.strokeStyle="#ccc";cx.lineWidth=1;cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=14;cx.setLineDash([]);
-if(detailed){
-rows.forEach(([g,v])=>{cx.font="11px 'Courier New',monospace";cx.fillStyle="#2c2c2c";cx.textAlign="left";cx.fillText(g,px,y);
-cx.textAlign="right";cx.font="bold 11px 'Courier New',monospace";cx.fillText(fmt(v)+" ₽",rx,y);y+=20});
-if(fee>0){cx.font="11px 'Courier New',monospace";cx.fillStyle="#2c2c2c";cx.textAlign="left";cx.fillText("Комиссия",px,y);
-cx.textAlign="right";cx.font="bold 11px 'Courier New',monospace";cx.fillText(fmt(fee)+" ₽",rx,y);y+=20}
-cx.strokeStyle="#2c2c2c";cx.lineWidth=2;cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=4;
-cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=12;
-cx.font="bold 14px 'Courier New',monospace";cx.fillStyle="#2c2c2c";cx.textAlign="left";cx.fillText(sold?"ИТОГО:":"ИТОГО К ОПЛАТЕ:",px,y);
-cx.textAlign="right";cx.font="bold 15px 'Courier New',monospace";cx.fillText(fmt(finalP)+" ₽",rx,y);y+=30;
-}else{
-cx.font="bold 11px 'Courier New',monospace";cx.fillStyle="#888";cx.textAlign="center";cx.fillText(sold?"ЦЕНА:":"ЦЕНА ДЛЯ ВАС:",mx,y);y+=22;
-cx.fillStyle="#2c2c2c";cx.font="bold 24px 'Courier New',monospace";
-cx.fillText(finalP>0?fmt(finalP)+" ₽":"ЦЕНА ПО ЗАПРОСУ",mx,y);y+=36;
-}
+cx.setLineDash([4,3]);cx.strokeStyle="#ccc";cx.lineWidth=1;cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=16;cx.setLineDash([]);
+cx.font="bold 11px 'Courier New',monospace";cx.fillStyle="#888";cx.textAlign="center";cx.fillText(sold?"ЦЕНА:":"ЦЕНА ДЛЯ ВАС:",mx,y);y+=24;
+cx.fillStyle="#2c2c2c";cx.font="bold 26px 'Courier New',monospace";
+cx.fillText(finalP>0?fmt(finalP)+" ₽":"ЦЕНА ПО ЗАПРОСУ",mx,y);y+=40;
 cx.setLineDash([4,3]);cx.strokeStyle="#ccc";cx.lineWidth=1;cx.beginPath();cx.moveTo(px,y);cx.lineTo(rx,y);cx.stroke();y+=14;cx.setLineDash([]);
 cx.textAlign="center";cx.fillStyle="#aaa";cx.font="10px 'Courier New',monospace";cx.fillText("★ ★ ★",mx,y);
 for(let x=6;x<W;x+=12){cx.beginPath();cx.arc(x,tH,3,0,Math.PI*2);cx.fillStyle="#fff";cx.fill()}
 return cv.toDataURL("image/png")}
 function carClientShare(id){
 const car=S.warehouse.find(c=>c.id===id);if(!car)return;
-shareReceipt(drawClientReceiptPNG(car),car.name+" клиенту")}
+const price=Math.round(car.status==="sold"?carSellRub(car):(parseNum(car.askPrice)||0));
+// нет цены (продажа без курса / сток без цены) — не шлём пустой чек «по запросу» и не пишем историю
+if(!(price>0)){alert("Нет цены для чека — проверьте цену/курс продажи или задайте цену клиенту");return}
+const du=drawClientReceiptPNG(car);
+// фиксируем в истории, какую цену отправили клиенту (дедуп одинаковых подряд — защита от двойного тапа)
+if(pushQuoteHist(car,price)){touch(car);saveWH();cloudUpsert(car);render()}
+shareReceipt(du,car.name+" клиенту")}

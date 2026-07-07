@@ -39,10 +39,13 @@ if(el&&S.showReceipt&&S.entries.length)el.outerHTML=receiptHTML()}
 // пересчитываются СРАЗУ, без кнопки «→ В ПРОДАЖУ»; убрал % — вернулись к «—».
 // Кнопка «→ В ПРОДАЖУ» по-прежнему фиксирует расчётную цену в поле (для сохранения в продажу).
 function pCalc(cost){
-let sell=toR(parseNum(S.sellPrice)||0,S.sellCurrency,S.rates),byMarkup=false;
+const rawSell=parseRub(S.sellPrice)||0; // целые единицы цены («500,000»=500000, не 500)
+// цена введена в валюте, но курса этой валюты нет → toR даст 0 и цена молча потеряется. Флажок для UI.
+const noRate=rawSell>0&&S.sellCurrency!=="RUB"&&!(parseNum(S.rates[S.sellCurrency])>0);
+let sell=toR(rawSell,S.sellCurrency,S.rates),byMarkup=false;
 if(!(sell>0)){const p=tgtPct();if(p!=null&&cost>0){sell=cost*(1+p/100);byMarkup=true}}
 const pr=sell-cost;
-return{cost,sell,profit:pr,markup:cost>0?(pr/cost)*100:0,margin:sell>0?(pr/sell)*100:0,byMarkup}}
+return{cost,sell,profit:pr,markup:cost>0?(pr/cost)*100:0,margin:sell>0?(pr/sell)*100:0,byMarkup,noRate}}
 
 // ===== ОБРАТНЫЙ КАЛЬКУЛЯТОР: цена продажи под целевую наценку =====
 function tgtPct(){const p=parseNum(S.targetMarkup);return isFinite(p)&&p>-100?p:null}
@@ -73,6 +76,9 @@ S.sellPrice=String(Math.round(price));saveDraft();render()}
 function clearRates(){S.activeCur.forEach(c=>S.rates[c]="");
 S.cbrDate="";S.cbrInfo="";saveDraft();render()}
 
+// выбор цвета кузова/салона в калькуляторе (свотч или палитра); "" — сброс. После выбора пикер сворачиваем.
+function setCalcColor(field,hex){S.carInfo[field]=normColor(hex);S.colorOpen=null;saveDraft();render()}
+
 // Полная очистка расчёта одной кнопкой: прикидка «на посмотреть» не идёт на склад,
 // и без этого её приходилось вычищать вручную по позиции. Курсы НЕ трогаем (они про
 // текущий день, не про машину; для них свой ✕). С подтверждением и отменой, как delCar.
@@ -99,10 +105,11 @@ else{S.activeCur.push(c);S.activeCur=Object.keys(CUR).filter(k=>S.activeCur.incl
 saveDraft();render()}
 
 function prHTML(pd){const hs=pd.sell>0,ip=pd.profit>=0,c=!hs?"ntl":ip?"pos":"neg",
-bw=!hs?0:Math.min(Math.abs(pd.markup),100),bc=!hs?"#333":ip?"#27ae60":"#e74c3c";
+bw=!hs?0:Math.min(Math.abs(pd.markup),100),bc=!hs?"#333":ip?"var(--pos)":"var(--neg)";
 const mk=pd.cost>0?marketRates():null; // справочный эквивалент по рыночному курсу банка
-return`<div class="pr-row"><span class="pr-lbl">Себестоимость</span><span class="pr-val ntl">${fmt(pd.cost)} ₽</span></div>
-${mk?`<div style="text-align:right;color:#556;font-size:9px;margin-top:-4px">≈ ${fmt(pd.cost/mk.usd)} $${mk.eur?` · ${fmt(pd.cost/mk.eur)} €`:""} по рынку</div>`:""}
+return`${pd.noRate?`<div style="color:var(--warn);font-size:10px;text-align:right;margin-bottom:4px">⚠ Нет курса ${esc(S.sellCurrency)} — цена продажи не учтена. Задайте курс в «Текущие курсы валют».</div>`:""}
+<div class="pr-row"><span class="pr-lbl">Себестоимость</span><span class="pr-val ntl">${fmt(pd.cost)} ₽</span></div>
+${mk?`<div style="text-align:right;color:var(--t4);font-size:9px;margin-top:-4px">≈ ${fmt(pd.cost/mk.usd)} $${mk.eur?` · ${fmt(pd.cost/mk.eur)} €`:""} по рынку</div>`:""}
 <div class="pr-row"><span class="pr-lbl">${pd.byMarkup?"Цена по наценке "+esc(S.targetMarkup)+"%":"Цена продажи"}</span><span class="pr-val ${c}">${hs?fmt(pd.sell)+" ₽":"—"}</span></div>
 <div class="pr-row"><span class="pr-lbl">Прибыль</span><span class="pr-val ${c}">${hs?(ip?"+":"")+fmt(pd.profit)+" ₽":"—"}</span></div>
 <div class="pr-row"><span class="pr-lbl">Наценка</span><span class="pr-val ${c}">${hs?(ip?"+":"")+fmtD(pd.markup,1)+"%":"—"}</span></div>
@@ -123,7 +130,7 @@ let h=`<div class="header"><h1>🚗 Авто Калькулятор</h1><p>Ра�
 <input type="text" class="car-name-input" placeholder="Название авто (напр. BMW X5 2023)" value="${esc(S.carName)}"
 oninput="S.carName=this.value;saveDraft()">
 <div class="coll-box"><div class="coll-header" onclick="S.showCarInfo=!S.showCarInfo;render()">
-<span>🚗 Данные авто${carSpecsStr(S.carInfo)||S.carInfo.vin||S.carInfo.trim?" ✓":""}</span><span class="coll-arrow" style="transform:rotate(${S.showCarInfo?180:0}deg)">▾</span></div>
+<span>🚗 Данные авто${carSpecsStr(S.carInfo)||S.carInfo.vin||S.carInfo.trim||S.carInfo.body||S.carInfo.inter?" ✓":""}</span><span class="coll-arrow" style="transform:rotate(${S.showCarInfo?180:0}deg)">▾</span></div>
 ${S.showCarInfo?`<div class="coll-body">
 <div class="edit-fields" style="align-items:flex-end;margin-bottom:8px">
 <div class="edit-field" style="flex:2"><label class="edit-lbl">VIN — ВНУТРЕННИЙ, В ЧЕК КЛИЕНТУ НЕ ПОПАДАЕТ</label>
@@ -134,11 +141,8 @@ ${S.showCarInfo?`<div class="coll-body">
 <input type="text" inputmode="numeric" maxlength="4" class="edit-input" placeholder="2023" value="${esc(S.carInfo.year)}" oninput="S.carInfo.year=this.value;saveDraft()"></div>
 <div class="edit-field"><label class="edit-lbl">ОБЪЁМ ДВИГАТЕЛЯ, Л</label>
 <input type="text" inputmode="decimal" maxlength="10" class="edit-input" placeholder="3.5" value="${esc(S.carInfo.vol)}" oninput="S.carInfo.vol=this.value;saveDraft()"></div></div>
-<div class="edit-fields" style="margin-bottom:8px">
-<div class="edit-field"><label class="edit-lbl">ЦВЕТ КУЗОВА</label>
-<input type="text" maxlength="40" class="edit-input" placeholder="белый" value="${esc(S.carInfo.body)}" oninput="S.carInfo.body=this.value;saveDraft()"></div>
-<div class="edit-field"><label class="edit-lbl">ЦВЕТ САЛОНА</label>
-<input type="text" maxlength="40" class="edit-input" placeholder="бежевый" value="${esc(S.carInfo.inter)}" oninput="S.carInfo.inter=this.value;saveDraft()"></div></div>
+<div style="margin-bottom:8px"><label class="edit-lbl">ЦВЕТ КУЗОВА</label>${colorPickerHTML("body",S.carInfo.body,"setCalcColor","calc:body")}</div>
+<div style="margin-bottom:8px"><label class="edit-lbl">ЦВЕТ САЛОНА</label>${colorPickerHTML("inter",S.carInfo.inter,"setCalcColor","calc:inter")}</div>
 <div class="edit-fields">
 <div class="edit-field"><label class="edit-lbl">КОМПЛЕКТАЦИЯ (видит клиент)</label>
 <input type="text" maxlength="80" class="edit-input" placeholder="Premium, панорама, HUD" value="${esc(S.carInfo.trim)}" oninput="S.carInfo.trim=this.value;saveDraft()"></div></div>
@@ -154,9 +158,10 @@ ${S.activeCur.map(c=>`<div style="flex:1 1 40%;min-width:120px"><label class="ra
 <div class="cur-chips">
 ${Object.keys(CUR).filter(c=>c!=="RUB").map(c=>`<div class="cur-chip ${S.activeCur.includes(c)?"active":""}" onclick="togCur('${c}')">${CUR[c].symbol} ${c} · ${CUR[c].label}</div>`).join("")}</div>
 <div class="cbr-row">
-<input type="date" class="cbr-date" value="${esc(S.cbrDate)}" max="${todayStr()}" oninput="S.cbrDate=this.value" title="Дата курса (пусто — сегодня)">
+<input type="date" class="cbr-date" value="${esc(S.cbrDate||todayStr())}" max="${todayStr()}" oninput="S.cbrDate=this.value" title="Дата курса ЦБ (по умолчанию — сегодня; можно выбрать архивную)">
 <div class="cbr-btn" onclick="fetchCbr()">↻ КУРС ЦБ</div>
 <div class="cbr-btn cbr-market" onclick="fetchMarket()" title="Курс обмена Камкомбанка (продажа банка)">🏦 РЫНОК</div>
+<div class="cbr-btn cbr-usdt" onclick="fetchUsdt()" title="Курс USDT/₽ (биржа ABCEX) — в поле USD">💠 USDT</div>
 <div class="cbr-btn cbr-clear" onclick="clearRates()" title="Очистить курсы и дату">✕</div></div>
 <div class="rate-hint" id="cbr-info">${esc(S.cbrInfo)||"«КУРС ЦБ» — официальный курс (можно на дату). «🏦 РЫНОК» — курс обмена Камкомбанка (продажа банка)."}</div>
 <div class="rate-hint">💡 Курс фиксируется за каждой позицией в момент добавления. Платишь таможню через месяц по новому курсу — поменяй курс здесь перед добавлением позиции, либо отредактируй позицию на складе.</div></div>`:""}</div>
@@ -181,7 +186,7 @@ h+=`<div class="entries-box"><div class="entries-header"><span>ПОЗИЦИИ ($
 S.entries.forEach((e,i)=>{const cm=curInfo(e.currency);
 if(S.editingEntry===i){
 h+=`<div class="entry-edit-form">
-<div style="color:#888;font-size:10px;margin-bottom:6px">${esc(e.icon)} ${esc(e.label)} — редактирование</div>
+<div style="color:var(--t3);font-size:10px;margin-bottom:6px">${esc(e.icon)} ${esc(e.label)} — редактирование</div>
 <label class="edit-lbl">СУММА</label>
 <input type="text" inputmode="decimal" maxlength="16" class="entry-edit-input" value="${esc(S.editValue)}" oninput="S.editValue=this.value">
 <div class="profit-curr-row" style="margin-bottom:8px">

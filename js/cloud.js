@@ -11,8 +11,11 @@ CL.queue=(Array.isArray(a)?a:[]).filter(o=>o&&((o.t==="u"&&o.car&&o.car.id)||(o.
 function saveCloudCfg(){try{localStorage.setItem("autoCalc_cloud",JSON.stringify({url:CL.url,key:CL.key}))}catch(e){}}
 function saveQueue(){try{localStorage.setItem("autoCalc_queue",JSON.stringify(CL.queue))}catch(e){}}
 loadCloud();
-const SB_URL_DEFAULT="https://sqgqydgtgugwzdsvsvnc.supabase.co";
-const SB_KEY_DEFAULT="sb_publishable_K0XaShzvYG4gb7OEJm8SNQ_sCyIiCZr";
+// Публичный репозиторий: НЕ зашиваем свой Supabase-проект как дефолт (иначе чужие форки/юзеры
+// по умолчанию цепляются к твоей базе — квота/абуз, а изоляция держится лишь на RLS).
+// Каждый вводит свой url + publishable-ключ в форме «Облако» (см. SUPABASE_SETUP.md).
+const SB_URL_DEFAULT="";
+const SB_KEY_DEFAULT="";
 if(!CL.url)CL.url=SB_URL_DEFAULT;
 if(!CL.key)CL.key=SB_KEY_DEFAULT;
 
@@ -109,7 +112,8 @@ S.warehouse=[];CL.queue=[];S.carReceipts={};
 S.carName="";S.entries=[];S.display="0";S.curCat=0;S.sellPrice="";S.targetMarkup="";S.sellCurrency="RUB";
 S.carInfo=normCarInfo(null);
 S.rates={...DEFAULT_RATES};S.activeCur=[...DEFAULT_ACTIVE];
-try{localStorage.removeItem("autoCalc_queue");localStorage.removeItem("autoCalc_draft")}catch(e){}
+S.rateApply=null;S.listBuilder=null;S.clientQuote=null;S.expandedCar=null; // не тащим открытые панели чужого аккаунта
+try{localStorage.removeItem("autoCalc_queue");localStorage.removeItem("autoCalc_draft");localStorage.removeItem("autoCalc_wh_corrupt")}catch(e){}
 saveWH()}
 function afterAuth(){
 const uid=CL.user&&CL.user.id;
@@ -254,11 +258,11 @@ function cloudBoxHTML(){
 const configured=!!(CL.url&&CL.key);
 let inner="";
 if(!configured||CL.showSetup){
-inner=`<div style="color:#778;font-size:10px;line-height:1.5;margin-bottom:10px">Вставь два значения из Supabase (Settings → API):</div>
+inner=`<div style="color:var(--t3);font-size:10px;line-height:1.5;margin-bottom:10px">Вставь два значения из Supabase (Settings → API):</div>
 <label class="edit-lbl">PROJECT URL</label>
 <input type="text" class="wh-sell-input" id="cl-url" placeholder="https://xxxx.supabase.co" value="${esc(CL.url)}">
 <label class="edit-lbl">ANON PUBLIC KEY</label>
-<input type="text" class="wh-sell-input" id="cl-key" placeholder="eyJhbG..." value="${esc(CL.key)}">
+<input type="text" class="wh-sell-input" id="cl-key" placeholder="sb_publishable_… или eyJ…" value="${esc(CL.key)}">
 <div style="display:flex;gap:8px">
 <div class="btn-action btn-blue" style="flex:1;margin:0;font-size:11px;padding:10px 0" onclick="cloudSaveCfg()">💾 СОХРАНИТЬ</div>
 ${configured?`<div class="btn-action btn-outline" style="flex:0 0 auto;margin:0;padding:10px 14px;font-size:11px" onclick="CL.showSetup=false;render()">✕</div>`:""}
@@ -266,7 +270,7 @@ ${configured?`<div class="btn-action btn-outline" style="flex:0 0 auto;margin:0;
 }else if(!CL.user){
 // Кнопки настроек проекта (URL/ключ) скрыты: обычному пользователю они не нужны,
 // подключение другого облака — через правку SB_URL_DEFAULT/SB_KEY_DEFAULT в коде
-inner=`<div style="color:#778;font-size:10px;margin-bottom:8px">Войди или зарегистрируйся (первый раз — жми Регистрация):</div>
+inner=`<div style="color:var(--t3);font-size:10px;margin-bottom:8px">Войди или зарегистрируйся (первый раз — жми Регистрация):</div>
 <input type="email" class="wh-sell-input" id="cl-email" placeholder="Почта" value="${esc(CL.email)}" oninput="CL.email=this.value">
 <input type="password" class="wh-sell-input" id="cl-pass" placeholder="Пароль (мин. 6 симв.)" oninput="CL.pass=this.value">
 <div style="display:flex;gap:8px;margin-bottom:8px">
@@ -276,7 +280,7 @@ inner=`<div style="color:#778;font-size:10px;margin-bottom:8px">Войди ил�
 }else{
 inner=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
 <div><div style="color:var(--ok2);font-size:11px;font-weight:600">✓ ${esc((CL.user.email||""))}</div>
-<div style="color:#667;font-size:9px;margin-top:2px" id="cloud-status">${esc(CL.status)}</div></div>
+<div style="color:var(--t4);font-size:9px;margin-top:2px" id="cloud-status">${esc(CL.status)}</div></div>
 <div class="backup-btn" style="flex:0 0 auto;padding:8px 12px" onclick="cloudLogout()">ВЫЙТИ</div></div>
 <div class="backup-btn" onclick="fullSync()">🔄 СИНХРОНИЗИРОВАТЬ СЕЙЧАС</div>`;
 }

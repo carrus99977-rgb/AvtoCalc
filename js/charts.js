@@ -64,7 +64,7 @@ bars+=`<text x="${(i*slot+slot/2).toFixed(1)}" y="${chartH+top+16}" text-anchor=
 font-size="8.5" fill="${sel?"var(--gold)":"var(--t4)"}" font-family="JetBrains Mono,monospace">${lbl}</text>`});
 // сводка по текущей области
 const scoped=scopedSold(),tp=profitSum(scoped),n=scoped.length;
-const info=`${scopeFull()}: <b style="color:${tp>=0?"#27ae60":"#e74c3c"}">${tp>=0?"+":""}${fmt(tp)} ₽</b> · ${n} маш.`;
+const info=`${scopeFull()}: <b style="color:${tp>=0?"var(--pos)":"var(--neg)"}">${tp>=0?"+":""}${fmt(tp)} ₽</b> · ${n} маш.`;
 return `<div class="coll-box"><div class="coll-header" style="cursor:default"><span>📊 Прибыль по месяцам</span></div>
 <div class="coll-body">
 <div class="scope-row">
@@ -106,10 +106,10 @@ style="cursor:pointer;opacity:${S.chartCat&&!sel?.45:1}" onclick="selCat('${c.id
 off+=len});
 const selC=cats.find(c=>c.id===S.chartCat);
 const center=selC
-?`<text x="${CX}" y="${CY-4}" text-anchor="middle" font-size="11" fill="${CHART_COLORS[selC.id]}" font-weight="700" font-family="Oswald,sans-serif">${fmtD(selC.v/total*100,1)}%</text>
+?`<text x="${CX}" y="${CY-4}" text-anchor="middle" font-size="11" fill="${CHART_COLORS[selC.id]}" font-weight="700" font-family="JetBrains Mono,monospace">${fmtD(selC.v/total*100,1)}%</text>
 <text x="${CX}" y="${CY+12}" text-anchor="middle" font-size="8.5" fill="var(--t3)" font-family="JetBrains Mono,monospace">${fmtShort(selC.v)} ₽</text>`
 :`<text x="${CX}" y="${CY-4}" text-anchor="middle" font-size="8.5" fill="var(--t4)" font-family="JetBrains Mono,monospace">РАСХОДЫ</text>
-<text x="${CX}" y="${CY+12}" text-anchor="middle" font-size="11" fill="var(--t0)" font-weight="700" font-family="Oswald,sans-serif">${fmtShort(total)} ₽</text>`;
+<text x="${CX}" y="${CY+12}" text-anchor="middle" font-size="11" fill="var(--t0)" font-weight="700" font-family="JetBrains Mono,monospace">${fmtShort(total)} ₽</text>`;
 const legend=cats.map(c=>`<div class="cl-row ${S.chartCat===c.id?"sel":""}" onclick="selCat('${c.id}')">
 <span class="cl-dot" style="background:${CHART_COLORS[c.id]}"></span>
 <span class="cl-name">${c.icon} ${c.label}</span>
@@ -132,7 +132,7 @@ const maxAbs=Math.max(...top.map(c=>Math.abs(c.profit)),1);
 const rows=top.map(c=>{const ip=c.profit>=0,w=Math.max(Math.abs(c.profit)/maxAbs*100,3);
 return `<div class="cb-row"><div class="cb-name">${esc(c.name)}</div>
 <div class="cb-track"><div class="cb-bar ${ip?"pos":"neg"}" style="width:${w.toFixed(1)}%"></div></div>
-<div class="cb-val" style="color:${ip?"#27ae60":"#e74c3c"}">${ip?"+":""}${fmtShort(c.profit)}</div></div>`}).join("");
+<div class="cb-val" style="color:${ip?"var(--pos)":"var(--neg)"}">${ip?"+":""}${fmtShort(c.profit)}</div></div>`}).join("");
 return `<div class="coll-box">${head}
 <div class="coll-body">${rows}${rest>0?`<div class="cb-more">и ещё ${rest} маш.</div>`:""}</div></div>`}
 

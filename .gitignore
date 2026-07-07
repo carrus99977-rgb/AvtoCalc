@@ -2,5 +2,6 @@
 .playwright-mcp/
 node_modules/
 
-# локальный конфиг Claude Code (dev-only)
+# локальный конфиг/кэш инструментов (dev-only) — содержат абсолютные пути и session-id, не для публичного репо
 .claude/
+.impeccable/

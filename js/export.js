@@ -44,6 +44,7 @@ setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function openListBuilder(){
 const stk=sortStock(S.warehouse.filter(c=>c.status==="stock")); // тот же порядок, что на экране
 if(!stk.length){alert("На складе нет машин");return}
+S.rateApply=null; // не держим две панели открытыми одновременно
 S.listBuilder={pct:"",add:"",save:true,
 items:stk.map(c=>{const ap=parseNum(c.askPrice);
 // off — машина скрыта из списка этой отправки (галочка снята); каждая новая отправка начинается со всеми
@@ -57,7 +58,7 @@ function lbNum(v){return parseNum(String(v==null?"":v).replace(/[^\d.,\-]/g,""))
 // наценка ко всем машинам с ценой: себестоимость × (1+%) + добавка, округление до 10 тыс ₽.
 // достаточно ЛЮБОГО одного поля: только %, только ₽ сверху — или оба сразу
 function lbApply(){const lb=S.listBuilder;if(!lb)return;
-const p=lbNum(lb.pct),a=lbNum(lb.add);
+const p=lbNum(lb.pct),a=parseRub(lb.add); // % допускает дробь; +₽ — целые рубли («200,000»=200000)
 const hasP=isFinite(p)&&p>-100,hasA=isFinite(a)&&a>0;
 if(!hasP&&!hasA){alert("Введите наценку: % (например 15) или сумму сверху в ₽ (например 200000) — достаточно одного из двух");return}
 lb.items.forEach(it=>{if(it.off||it.onRequest)return;
@@ -74,14 +75,14 @@ const inc=lb.items.filter(it=>!it.off); // в список идут только
 if(!inc.length){alert("Отметьте хотя бы одну машину для списка");return}
 let t="🚗 МАШИНЫ В НАЛИЧИИ ("+new Date().toLocaleDateString("ru-RU")+"):\n";
 for(const it of inc){
-const p=parseNum(it.price);
+const p=parseRub(it.price); // целые рубли («500,000»=500000)
 if(!it.onRequest&&!(p>0)){alert("У «"+it.name+"» нет цены — введите или поставьте ПО ЗАПРОСУ");return}
 t+="• "+it.name+(it.onRequest?" — цена по запросу":" — "+fmt(p)+" ₽")+"\n"}
 t=t.trim();
 if(lb.save){ // запомнить цены в карточках: «цена для клиента» и чек 👤 покажут те же цифры.
 // скрытые машины не трогаем — их цена в карточке остаётся как была
 inc.forEach(it=>{const car=S.warehouse.find(c=>c.id===it.id);if(!car)return;
-const p=parseNum(it.price);const np=it.onRequest?"":(p>0?String(p):"");
+const p=parseRub(it.price);const np=it.onRequest?"":(p>0?String(p):"");
 if((car.askPrice||"")!==np){car.askPrice=np;touch(car);cloudUpsert(car)}});
 saveWH()}
 S.listBuilder=null;render();
@@ -93,7 +94,7 @@ function listBuilderHTML(){
 const lb=S.listBuilder;if(!lb)return"";
 let h=`<div class="coll-box" id="list-builder"><div class="coll-header" style="cursor:default"><span>📤 Список клиентам — цены</span></div>
 <div class="coll-body">
-<div style="color:#778;font-size:10px;line-height:1.5;margin-bottom:8px">Галочка — машина попадёт в список (сними, чтобы скрыть). Накинь наценку на себестоимость сразу всем — или поправь цену каждой машине. «ПО ЗАПРОСУ» — без цены. Округление до 10 тыс ₽.</div>
+<div style="color:var(--t3);font-size:10px;line-height:1.5;margin-bottom:8px">Галочка — машина попадёт в список (сними, чтобы скрыть). Накинь наценку на себестоимость сразу всем — или поправь цену каждой машине. «ПО ЗАПРОСУ» — без цены. Округление до 10 тыс ₽.</div>
 <div class="bulk-rate-row">
 <div class="bulk-rate-field"><label class="edit-lbl">НАЦЕНКА %</label>
 <input type="text" inputmode="decimal" maxlength="8" class="edit-input" placeholder="15" value="${esc(lb.pct)}" oninput="S.listBuilder.pct=this.value"></div>
@@ -104,15 +105,15 @@ lb.items.forEach((it,i)=>{h+=`<div class="edit-entry-card" style="${it.off?"opac
 <div class="edit-entry-title" style="display:flex;justify-content:space-between;gap:8px;align-items:center">
 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:0">
 <input type="checkbox" ${it.off?"":"checked"} onchange="lbInclude(${i},this.checked)"><span>🚗 ${esc(it.name)}</span></label>
-<span style="color:#667;flex:0 0 auto">себе: ${fmt(it.cost)} ₽</span></div>
-${it.off?`<div style="color:#778;font-size:10px;padding:4px 0 0 26px">скрыта — в список не попадёт, цена в карточке не изменится</div>`
+<span style="color:var(--t4);flex:0 0 auto">себе: ${fmt(it.cost)} ₽</span></div>
+${it.off?`<div style="color:var(--t3);font-size:10px;padding:4px 0 0 26px">скрыта — в список не попадёт, цена в карточке не изменится</div>`
 :`<div class="edit-fields" style="align-items:flex-end">
-${it.onRequest?`<div class="edit-field" style="color:#778;font-size:11px;padding:10px 0">цена по запросу</div>`
+${it.onRequest?`<div class="edit-field" style="color:var(--t3);font-size:11px;padding:10px 0">цена по запросу</div>`
 :`<div class="edit-field"><label class="edit-lbl">ЦЕНА КЛИЕНТУ ₽</label>
 <input type="text" inputmode="decimal" maxlength="16" class="edit-input" placeholder="0" value="${esc(it.price)}" oninput="lbPrice(${i},this.value)"></div>`}
 <div class="pcb ${it.onRequest?"a-rub":""}" style="flex:0 0 auto" onclick="lbToggle(${i})">ПО ЗАПРОСУ</div>
 </div>`}</div>`});
-h+=`<label style="display:flex;align-items:center;gap:8px;color:#778;font-size:10px;margin:8px 0;cursor:pointer">
+h+=`<label style="display:flex;align-items:center;gap:8px;color:var(--t3);font-size:10px;margin:8px 0;cursor:pointer">
 <input type="checkbox" ${lb.save?"checked":""} onchange="S.listBuilder.save=this.checked"> Запомнить цены в карточках (чек клиенту покажет те же)</label>
 <div style="display:flex;gap:8px">
 <div class="btn-action btn-green" style="flex:1;margin:0" onclick="lbSend()">📤 ОТПРАВИТЬ (${lb.items.filter(it=>!it.off).length} из ${lb.items.length})</div>
