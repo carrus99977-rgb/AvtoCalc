@@ -609,7 +609,7 @@ if(car.status==="stock"){h+=`<div class="btn-action btn-primary" title="Офор
 if(car.status==="estimate"){h+=`<div class="btn-action btn-primary" title="Купил — перевести на склад (дата покупки станет сегодняшней)" onclick="event.stopPropagation();estToStock('${esc(car.id)}')">🏭 НА СКЛАД</div>`}
 if(car.status==="transit"){h+=`<div class="btn-action btn-primary" title="Машина пришла — перевести на склад (дата поступления = сегодня)" onclick="event.stopPropagation();transitToStock('${esc(car.id)}')">✅ ПРИШЛА</div>`}
 if(car.status==="sold"){h+=`<div class="btn-action btn-primary" title="Изменить цену или дату продажи" onclick="event.stopPropagation();startEditSale('${esc(car.id)}')">💰 ЦЕНА</div>`}
-if(car.status==="estimate"){h+=`<div class="btn-action btn-ghost g-amber" title="Купил, машина едет — отметить «в пути»" onclick="event.stopPropagation();estToTransit('${esc(car.id)}')">🚚 В ПУТИ</div>`}
+if(car.status==="estimate"){h+=`<div class="btn-action btn-ghost g-amber" title="Заказал — машина едет, отправить в раздел «В пути»" onclick="event.stopPropagation();estToTransit('${esc(car.id)}')">🚚 ЗАКАЗАЛ</div>`}
 h+=`<div class="btn-action btn-ghost g-blue" title="Название, дата, курсы и суммы" onclick="event.stopPropagation();startCarEdit('${esc(car.id)}')">✏️ ПРАВКА</div>`;
 if(car.status!=="sold"){h+=`<div class="btn-action btn-ghost g-violet" title="Скопировать расчёт в калькулятор" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋 В КАЛЬКУЛЯТОР</div>`}
 else{h+=`<div class="btn-action btn-ghost g-violet" title="Вернуть на склад" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
