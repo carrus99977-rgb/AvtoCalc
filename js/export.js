@@ -81,8 +81,9 @@ t+="• "+it.name+(it.onRequest?" — цена по запросу":" — "+fmt(
 // характеристики из карточки (если заполнены): год · объём · цвет кузова/салона · комплектация
 const car=S.warehouse.find(c=>c.id===it.id),ci=car&&car.info;
 if(ci){const d=[];const spec=carSpecsStr(ci);if(spec)d.push(spec);
-if(ci.body)d.push("кузов "+colorLabel(ci.body));
-if(ci.inter)d.push("салон "+colorLabel(ci.inter));
+// цвета — только названием; кастомный hex (colorLabel вернул код) клиенту не показываем
+if(ci.body){const cl=colorLabel(ci.body);if(cl&&cl[0]!=="#")d.push("кузов "+cl)}
+if(ci.inter){const cl=colorLabel(ci.inter);if(cl&&cl[0]!=="#")d.push("салон "+cl)}
 if(ci.trim)d.push(ci.trim);
 if(d.length)t+="   "+d.join(" · ")+"\n"}}
 t=t.trim();

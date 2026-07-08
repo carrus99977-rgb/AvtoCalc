@@ -33,6 +33,7 @@ car.status="stock";car.date=new Date().toISOString();
 addHist(car,"edited","прикидка → на склад");
 touch(car);saveWH();cloudUpsert(car);render();
 showToast("Машина на складе","Отменить",()=>{const c=S.warehouse.find(x=>x.id===id);if(!c)return;
+if(Array.isArray(c.history))c.history.pop(); // убираем событие перехода, добавленное этим действием
 c.status="estimate";c.date=oldDate;touch(c);saveWH();cloudUpsert(c);render()})}
 
 // Прикидка → в пути: машину купил, едет. Дата = момент отправки; заводим метку напоминания.
@@ -42,6 +43,7 @@ car.status="transit";car.date=new Date().toISOString();car.transitCheckAt=car.da
 addHist(car,"edited","прикидка → в пути");
 touch(car);saveWH();cloudUpsert(car);render();
 showToast("Машина в пути","Отменить",()=>{const c=S.warehouse.find(x=>x.id===id);if(!c)return;
+if(Array.isArray(c.history))c.history.pop(); // убираем событие перехода, добавленное этим действием
 c.status="estimate";c.date=oldDate;c.transitCheckAt=null;touch(c);saveWH();cloudUpsert(c);render()})}
 
 // Со склада обратно в прикидки (ошибочно оформил как покупку). Дату не трогаем.
@@ -51,6 +53,7 @@ car.status="estimate";car.transitCheckAt=null;
 addHist(car,"edited","склад → прикидка");
 touch(car);saveWH();cloudUpsert(car);render();
 showToast("Машина в прикидках","Отменить",()=>{const c=S.warehouse.find(x=>x.id===id);if(!c)return;
+if(Array.isArray(c.history))c.history.pop(); // убираем событие перехода, добавленное этим действием
 c.status="stock";touch(c);saveWH();cloudUpsert(c);render()})}
 
 // Со склада в путь (ещё не приехала). Дата = момент отправки, заводим метку напоминания.
@@ -60,6 +63,7 @@ car.status="transit";car.date=new Date().toISOString();car.transitCheckAt=car.da
 addHist(car,"edited","склад → в пути");
 touch(car);saveWH();cloudUpsert(car);render();
 showToast("Машина в пути","Отменить",()=>{const c=S.warehouse.find(x=>x.id===id);if(!c)return;
+if(Array.isArray(c.history))c.history.pop(); // убираем событие перехода, добавленное этим действием
 c.status="stock";c.date=oldDate;c.transitCheckAt=null;touch(c);saveWH();cloudUpsert(c);render()})}
 
 // В пути → на склад: машина пришла. Дата покупки/поступления = сегодня (дальше как обычный сток).
@@ -69,6 +73,7 @@ car.status="stock";car.date=new Date().toISOString();car.transitCheckAt=null;
 addHist(car,"edited","в пути → на склад (пришла)");
 touch(car);saveWH();cloudUpsert(car);render();
 showToast("Машина пришла — на складе","Отменить",()=>{const c=S.warehouse.find(x=>x.id===id);if(!c)return;
+if(Array.isArray(c.history))c.history.pop(); // убираем событие перехода, добавленное этим действием
 c.status="transit";c.date=oldDate;c.transitCheckAt=oldCheck;touch(c);saveWH();cloudUpsert(c);render()})}
 
 // Еженедельное напоминание (в приложении, при открытии): для машин «в пути» старше недели с последней
@@ -78,6 +83,8 @@ const WEEK=7*864e5;
 const due=S.warehouse.filter(c=>c.status==="transit"&&Date.now()-(Date.parse(c.transitCheckAt||c.date)||0)>=WEEK);
 askTransit(due,0)}
 function askTransit(list,i){if(!list||i>=list.length)return;
+// не перебиваем уже открытый диалог (напр. смены владельца облака) — ждём, пока закроют
+if(S.confirmAction){setTimeout(()=>askTransit(list,i),600);return}
 const car=list[i];const days=Math.max(0,Math.floor((Date.now()-(Date.parse(car.date)||Date.now()))/864e5));
 showConfirm(`🚚 «${car.name}» в пути уже ${days} дн. Машина пришла или ещё едет?`,
 ()=>{transitToStock(car.id);setTimeout(()=>askTransit(list,i+1),120)},
@@ -247,7 +254,9 @@ const sel=ra.items.filter(it=>!it.off).map(it=>S.warehouse.find(c=>c.id===it.id)
 if(!sel.length){alert("Нет отмеченных машин с валютными позициями под этот курс");return}
 showConfirm(`Применить рыночный курс к ${sel.length} маш.? Курс всех валютных позиций будет перебит, себестоимость пересчитается.`,()=>{
 const undo=[]; // снимок только реально изменённых машин
-sel.forEach(car=>{const old=carCost(car);const oldR={...carRates(car)}; // КОПИЯ курса ДО применения (car.rates мутируется по ссылке)
+sel.forEach(car=>{const old=carCost(car);
+// «было» берём из самих позиций (e.rate) — как показывает чип и как считает себестоимость; car.rates мог отстать
+const oldR={};car.entries.forEach(e=>{if(e.currency!=="RUB"&&!(e.currency in oldR)){const v=numStr(e.rate);if(v)oldR[e.currency]=v}});
 const before={id:car.id,entries:JSON.parse(JSON.stringify(car.entries)),rates:{...(car.rates||{})},
 eurRate:car.eurRate,usdRate:car.usdRate,history:JSON.parse(JSON.stringify(car.history||[]))};
 let mut=false;
@@ -329,16 +338,17 @@ const ratesOf=arr=>{const r={};(arr||[]).forEach(e=>{if(e.currency&&e.currency!=
 const oR=ratesOf(oldE),nR=ratesOf(newE);
 ["USD","EUR"].forEach(c=>{const o=oR[c]||"",n=nR[c]||"";
 if(o!==n&&(o||n))parts.push("курс "+(sym[c]||c)+" "+(o?fmtRate(Number(o)):"—")+"→"+(n?fmtRate(Number(n)):"—"))});
-// позиции — сопоставляем по названию (label), запасной ключ — категория
+// позиции — сопоставляем по названию (label), запасной ключ — категория.
+// Очередь старых на каждый ключ: дубли одного названия (две «Прочие расходы») мэтчим по ПОРЯДКУ.
 const key=e=>(e.label||e.category||"позиция");
-const oldByKey={};(oldE||[]).forEach(e=>{if(!(key(e)in oldByKey))oldByKey[key(e)]=e});
-const seen=new Set();
-(newE||[]).forEach(e=>{const k=key(e);seen.add(k);const o=oldByKey[k];
+const oldByKey={};(oldE||[]).forEach(e=>{(oldByKey[key(e)]=oldByKey[key(e)]||[]).push(e)});
+(newE||[]).forEach(e=>{const k=key(e);const o=(oldByKey[k]||[]).shift();
 const cur=e.currency==="RUB"?"₽":(sym[e.currency]||e.currency);
 const na=Math.round(parseNum(e.amount));
 if(!o)parts.push("+ "+k+": "+fmt(na)+" "+cur);
 else{const oa=Math.round(parseNum(o.amount));if(oa!==na)parts.push(k+": "+fmt(oa)+"→"+fmt(na)+" "+cur)}});
-(oldE||[]).forEach(e=>{if(!seen.has(key(e)))parts.push("− "+key(e))});
+// не разобранные из очередей = удалённые позиции
+Object.keys(oldByKey).forEach(k=>{(oldByKey[k]||[]).forEach(()=>parts.push("− "+k))});
 return parts}
 
 function startCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car)return;
@@ -357,14 +367,20 @@ if(!String(S.editName||"").trim()){alert("Введите название авт
 for(const e of S.editCarEntries){if(!(parseNum(e.amount)>0)){alert("Проверьте суммы — есть пустые или нулевые");return}
 if(e.currency!=="RUB"&&!(parseNum(e.rate)>0)){alert("Проверьте курсы — есть пустые");return}}
 const oldCost=carCost(car); // себестоимость до правки — для истории
-// снимок ДО перезаписи — чтобы в истории показать что именно менялось (курсы, суммы позиций)
-const oldEntriesSnap=car.entries.map(e=>({label:e.label,category:e.category,amount:e.amount,currency:e.currency,rate:e.rate}));
+// снимок ДО перезаписи — чтобы в истории показать что именно менялось (курсы, суммы позиций).
+// rate с тем же фолбэком, что в редакторе (легаси-курс мог лежать в car.rates) — иначе фантом «—→X».
+const _ocr=carRates(car);
+const oldEntriesSnap=car.entries.map(e=>({label:e.label,category:e.category,amount:e.amount,currency:e.currency,
+rate:e.rate||(e.currency==="RUB"?"":(_ocr[e.currency]||""))}));
 const oldNameSnap=car.name;
 // сигнатура значимых полей (дата — на уровне дня): событие пишем, только если реально что-то изменилось
 const sig=c=>JSON.stringify({n:c.name||"",no:c.note||"",a:c.askPrice||"",d:carDateInput(c),e:c.entries,i:c.info||null});
 const before=sig(car);
 car.entries=S.editCarEntries.map(e=>{const{_new,...rest}=e;
 return{...rest,amount:parseNum(e.amount),rate:e.currency==="RUB"?"":numStr(e.rate)}});
+// ресинк карты курсов машины из позиций (иначе car.rates устаревает → cpToCalc/raApply берут старый курс)
+car.rates=car.rates||{};car.entries.forEach(e=>{if(e.currency!=="RUB"&&e.rate)car.rates[e.currency]=e.rate});
+car.eurRate=car.rates.EUR||"";car.usdRate=car.rates.USD||"";
 car.name=S.editName.trim();
 car.note=String(S.editNote||"").trim().slice(0,500);
 car.info=normCarInfo(S.editInfo);
