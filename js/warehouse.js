@@ -319,7 +319,9 @@ car.entries.forEach(e=>{if(e.currency!=="RUB"&&CUR[e.currency]&&!S.activeCur.inc
 S.activeCur=Object.keys(CUR).filter(k=>S.activeCur.includes(k));
 S.entries=JSON.parse(JSON.stringify(car.entries));S.display="0";S.curCat=0;S.showReceipt=false;S.sellPrice="";
 S.editingEntry=null; // иначе форма правки позиции «прилипнет» к скопированной машине со старыми значениями
-saveDraft();render();window.scrollTo({top:0,behavior:"smooth"})};
+saveDraft();render();window.scrollTo({top:0,behavior:"smooth"});
+// копия не связана с машиной: правки в калькуляторе её не меняют, а сохранение создаст новую — говорим прямо
+showToast("Это копия для нового расчёта. Машина «"+car.name.slice(0,40)+"» не изменится — её меняет ✏️ ПРАВКА")};
 // незавершённый расчёт в калькуляторе не затираем молча
 if(S.entries.length)showConfirm("Заменить текущий расчёт данными этой машины?",doCopy);
 else doCopy()}
@@ -358,9 +360,17 @@ S.editInfo=normCarInfo(car.info);
 const cr=carRates(car);
 S.editCarEntries=car.entries.map(e=>({...e,
 rate:e.rate||(e.currency==="RUB"?"":(cr[e.currency]||""))}));
-S.bulkRates={};S.editCarEntries.forEach(e=>{
-if(e.currency!=="RUB"&&!(e.currency in S.bulkRates))S.bulkRates[e.currency]=S.rates[e.currency]||cr[e.currency]||""});
+syncBulkRates();
 render()}
+// Общее поле курса показывает курс САМОЙ машины (раньше — сегодняшний курс калькулятора, что путало):
+// у всех позиций валюты курс один → он; курсы разные (платили в разные дни) → пусто с подсказкой «разные».
+function syncBulkRates(){if(!S.editCarEntries)return;const seen={};
+S.editCarEntries.forEach(e=>{if(e.currency==="RUB")return;const r=numStr(e.rate);
+if(!(e.currency in seen))seen[e.currency]=r;else if(seen[e.currency]!==r)seen[e.currency]=null});
+S.bulkRates={};Object.keys(seen).forEach(c=>{S.bulkRates[c]=seen[c]||""});
+// если форма уже на экране — обновляем общие поля без перерисовки (фокус в поле позиции не теряется)
+document.querySelectorAll("input[data-bulk-cur]").forEach(el=>{const c=el.getAttribute("data-bulk-cur");
+if(c in S.bulkRates&&document.activeElement!==el)el.value=S.bulkRates[c]})}
 function cancelCarEdit(){S.editingCarId=null;S.editCarEntries=null;render()}
 function saveCarEdit(id){const car=S.warehouse.find(c=>c.id===id);if(!car||!S.editCarEntries)return;
 if(!String(S.editName||"").trim()){alert("Введите название авто");return}
@@ -393,7 +403,8 @@ if(car.name!==oldNameSnap)parts.unshift("название");
 let det=parts.join(" · ");if(det.length>88)det=det.slice(0,87)+"…"; // оставляем место для итоговой суммы (лимит 120)
 addHist(car,"edited",(det?det+" · ":"")+fmt(newCost)+" ₽"+(dCost?" ("+(dCost>0?"+":"")+fmt(dCost)+")":""));}
 S.editingCarId=null;S.editCarEntries=null;touch(car);saveWH();cloudUpsert(car);render()}
-function updEditEntry(i,field,val){if(!S.editCarEntries)return;S.editCarEntries[i][field]=val;updEditCost()}
+function updEditEntry(i,field,val){if(!S.editCarEntries)return;S.editCarEntries[i][field]=val;
+if(field==="rate")syncBulkRates();updEditCost()}
 function updEditCost(){if(!S.editCarEntries)return;
 const car=S.warehouse.find(c=>c.id===S.editingCarId);if(!car)return;
 const entries=S.editCarEntries.map(e=>({...e,amount:parseNum(e.amount)||0}));
@@ -405,9 +416,13 @@ const orig=carCost(car);const diff=cost-orig;
 const del=document.getElementById("edit-cost-diff");
 if(del){del.textContent=(diff===0?"без изменений":(diff>0?"+":"")+fmt(diff)+" ₽ к исходной");
 del.style.color=diff>0?"var(--neg)":diff<0?"var(--pos)":"var(--t4)"}}
-function bulkApply(curr){if(!S.editCarEntries)return;
-const v=S.bulkRates[curr];if(!(parseNum(v)>0)){alert("Введите курс");return}
-const cv=numStr(v);S.editCarEntries.forEach(e=>{if(e.currency===curr)e.rate=cv});render()}
+// Общий курс валюты: вводишь — он СРАЗУ встаёт во все позиции этой валюты (раньше нужно было ещё нажать
+// «→ ВСЕМ», и без этого «Сохранить» ничего не меняло). Без render(): поле не теряет фокус при наборе.
+function bulkInput(curr,val){if(!S.editCarEntries)return;S.bulkRates[curr]=val;
+if(!(parseNum(val)>0))return; // пусто/недописано — позиции не трогаем
+const cv=numStr(val);S.editCarEntries.forEach(e=>{if(e.currency===curr)e.rate=cv});
+document.querySelectorAll('input[data-rate-cur="'+curr+'"]').forEach(el=>{el.value=cv});
+updEditCost()}
 
 // ===== ДОБАВЛЕНИЕ РАСХОДА К МАШИНЕ (в режиме правки) =====
 function addEditEntry(){if(!S.editCarEntries)return;
@@ -416,11 +431,11 @@ S.editCarEntries.push({_new:true,category:cat.id,label:cat.label,icon:cat.icon,a
 render()}
 function rmEditEntry(i){const e=S.editCarEntries&&S.editCarEntries[i];
 if(!e||!e._new)return; // удалять можно только ещё не сохранённые строки
-S.editCarEntries.splice(i,1);render()}
+S.editCarEntries.splice(i,1);syncBulkRates();render()}
 function setEditEntryCat(i,catId){const c=CATS.find(x=>x.id===catId);const e=S.editCarEntries&&S.editCarEntries[i];
 if(!c||!e)return;e.category=c.id;e.label=c.label;e.icon=c.icon;updEditCost()}
 function setEditEntryCur(i,cur){const e=S.editCarEntries&&S.editCarEntries[i];if(!e||!CUR[cur])return;
-e.currency=cur;e.rate=cur==="RUB"?"":(S.rates[cur]||"");render()}
+e.currency=cur;e.rate=cur==="RUB"?"":(S.rates[cur]||"");syncBulkRates();render()}
 // выбор цвета кузова/салона в правке машины (свотч или палитра); "" — сброс. Пишется в car при СОХРАНИТЬ.
 function setEditColor(field,hex){if(!S.editInfo)return;S.editInfo[field]=normColor(hex);S.colorOpen=null;render()}
 
@@ -595,11 +610,10 @@ h+=`<div class="wh-detail" onclick="event.stopPropagation()">
 <input type="text" maxlength="80" class="edit-input" placeholder="Premium, панорама" value="${esc(S.editInfo.trim)}" oninput="S.editInfo.trim=this.value"></div></div>
 <div style="color:var(--t4);font-size:9px;margin-bottom:6px;letter-spacing:.5px">КУРСЫ ПО ФАКТУ ОПЛАТЫ:</div>`;
 if(bulkCurs.length){
-h+=`<div style="color:var(--t4);font-size:9px;margin-bottom:6px;letter-spacing:.5px">БЫСТРО ПРИМЕНИТЬ КУРС КО ВСЕМ ПОЗИЦИЯМ:</div>`;
+h+=`<div style="color:var(--t4);font-size:9px;margin-bottom:6px;letter-spacing:.5px">ОБЩИЙ КУРС — СРАЗУ МЕНЯЕТ ВСЕ ПОЗИЦИИ ЭТОЙ ВАЛЮТЫ:</div>`;
 bulkCurs.forEach(c=>{h+=`<div class="bulk-rate-row"><div class="bulk-rate-field">
-<label class="edit-lbl">${curInfo(c).symbol} ${esc(c)} / ₽</label>
-<input type="text" inputmode="decimal" maxlength="16" class="edit-input" value="${esc(S.bulkRates[c])}" oninput="S.bulkRates['${esc(c)}']=this.value"></div>
-<div class="bulk-apply" onclick="bulkApply('${esc(c)}')">→ ВСЕМ ${curInfo(c).symbol}</div></div>`});
+<label class="edit-lbl">${curInfo(c).symbol} ${esc(c)} / ₽ — ВСЕ ПОЗИЦИИ</label>
+<input type="text" inputmode="decimal" maxlength="16" class="edit-input" data-bulk-cur="${esc(c)}" placeholder="разные курсы" value="${esc(S.bulkRates[c])}" oninput="bulkInput('${esc(c)}',this.value)"></div></div>`});
 }
 S.editCarEntries.forEach((e,i)=>{const cm=curInfo(e.currency);
 if(e._new){
@@ -616,7 +630,7 @@ onclick="setEditEntryCur(${i},'${esc(c)}')">${curInfo(c).symbol} ${esc(c)}</div>
 <div class="edit-field"><label class="edit-lbl">СУММА ${cm.symbol}</label>
 <input type="text" inputmode="decimal" maxlength="16" class="edit-input" placeholder="0" value="${esc(e.amount)}" oninput="updEditEntry(${i},'amount',this.value)"></div>
 ${e.currency!=="RUB"?`<div class="edit-field"><label class="edit-lbl">КУРС ₽</label>
-<input type="text" inputmode="decimal" maxlength="16" class="edit-input" value="${esc(e.rate)}" oninput="updEditEntry(${i},'rate',this.value)"></div>`:""}
+<input type="text" inputmode="decimal" maxlength="16" class="edit-input" data-rate-cur="${esc(e.currency)}" value="${esc(e.rate)}" oninput="updEditEntry(${i},'rate',this.value)"></div>`:""}
 </div></div>`;
 }else{
 h+=`<div class="edit-entry-card"><div class="edit-entry-title">${esc(e.icon)} ${esc(e.label)} (${cm.symbol})</div>
@@ -624,7 +638,7 @@ h+=`<div class="edit-entry-card"><div class="edit-entry-title">${esc(e.icon)} ${
 <div class="edit-field"><label class="edit-lbl">СУММА ${cm.symbol}</label>
 <input type="text" inputmode="decimal" maxlength="16" class="edit-input" value="${esc(e.amount)}" oninput="updEditEntry(${i},'amount',this.value)"></div>
 ${e.currency!=="RUB"?`<div class="edit-field"><label class="edit-lbl">КУРС ₽</label>
-<input type="text" inputmode="decimal" maxlength="16" class="edit-input" value="${esc(e.rate)}" oninput="updEditEntry(${i},'rate',this.value)"></div>`:""}
+<input type="text" inputmode="decimal" maxlength="16" class="edit-input" data-rate-cur="${esc(e.currency)}" value="${esc(e.rate)}" oninput="updEditEntry(${i},'rate',this.value)"></div>`:""}
 </div></div>`}});
 h+=`<div class="backup-btn" style="margin-bottom:10px" onclick="addEditEntry()">➕ ДОБАВИТЬ РАСХОД</div>`;
 const editCost=totR(S.editCarEntries.map(e=>({...e,amount:parseNum(e.amount)||0})),null);
@@ -674,7 +688,7 @@ if(car.status==="transit"){h+=`<div class="btn-action btn-primary" title="Маш
 if(car.status==="sold"){h+=`<div class="btn-action btn-primary" title="Изменить цену или дату продажи" onclick="event.stopPropagation();startEditSale('${esc(car.id)}')">💰 ЦЕНА</div>`}
 if(car.status==="estimate"){h+=`<div class="btn-action btn-order" title="Заказал — машина едет, отправить в раздел «В пути»" onclick="event.stopPropagation();estToTransit('${esc(car.id)}')">🚚 ЗАКАЗАЛ</div>`}
 h+=`<div class="btn-action btn-ghost g-blue" title="Название, дата, курсы и суммы" onclick="event.stopPropagation();startCarEdit('${esc(car.id)}')">✏️ ПРАВКА</div>`;
-if(car.status!=="sold"){h+=`<div class="btn-action btn-ghost g-violet" title="Скопировать расчёт в калькулятор" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋 В КАЛЬКУЛЯТОР</div>`}
+if(car.status!=="sold"){h+=`<div class="btn-action btn-ghost g-violet" title="Копия в калькулятор как новый расчёт. Эта машина не изменится — её меняет «ПРАВКА»" onclick="event.stopPropagation();cpToCalc('${esc(car.id)}')">📋 КОПИЯ В РАСЧЁТ</div>`}
 else{h+=`<div class="btn-action btn-ghost g-violet" title="Вернуть на склад" onclick="event.stopPropagation();retStock('${esc(car.id)}')">↩️ ВЕРНУТЬ</div>`}
 // со склада можно вернуть в прикидку или отправить в путь (ошибочно оформил / ещё не приехала)
 if(car.status==="stock"){h+=`<div class="btn-action btn-ghost g-blue" title="Вернуть в прикидки (ошибочно оформил как покупку)" onclick="event.stopPropagation();stockToEstimate('${esc(car.id)}')">📝 В ПРИКИДКУ</div>

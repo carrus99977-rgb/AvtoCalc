@@ -73,6 +73,23 @@ price=v/r}
 S.sellPrice=String(Math.round(price));saveDraft();render()}
 
 // Очистить значения курсов активных валют и дату ЦБ (позиции не трогаем — у них курс зафиксирован)
+// Курс в «Текущих курсах» поменяли, а уже добавленные позиции держат свой зафиксированный курс —
+// раньше итог молча не менялся («меняю курс, а он не меняется»). Теперь спрашиваем один раз.
+let _recalcSkip="";
+function offerRecalc(){
+if(S.confirmAction||!S.entries.length)return;
+const sym={USD:"$",EUR:"€"};const ch=[];
+Object.keys(S.rates).forEach(c=>{const nr=numStr(S.rates[c]);if(!(parseNum(nr)>0))return;
+const olds=[];S.entries.forEach(e=>{if(e.currency===c&&e.rate&&numStr(e.rate)!==nr&&!olds.includes(numStr(e.rate)))olds.push(numStr(e.rate))});
+if(olds.length)ch.push({c,nr,olds})});
+if(!ch.length)return;
+const sig=ch.map(x=>x.c+":"+x.olds.join(",")+">"+x.nr).join("|");
+if(sig===_recalcSkip)return; // на этот же курс уже ответили «оставить» — не переспрашиваем
+const txt=ch.map(x=>(sym[x.c]||x.c)+" "+x.olds.map(o=>fmtRate(Number(o))).join(" / ")+" → "+fmtRate(Number(x.nr))).join(", ");
+showConfirm("Курс изменился: "+txt+". Пересчитать уже добавленные позиции по новому курсу? «Оставить» — позиции останутся по прежнему курсу, новый будет только у следующих.",
+()=>{ch.forEach(x=>{S.entries.forEach(e=>{if(e.currency===x.c)e.rate=x.nr})});
+_recalcSkip="";S.showReceipt=false;S.receiptImage=null;saveDraft();render()},
+()=>{_recalcSkip=sig},{yes:"ПЕРЕСЧИТАТЬ",no:"ОСТАВИТЬ",yesClass:"btn-green"})}
 function clearRates(){S.activeCur.forEach(c=>S.rates[c]="");
 S.cbrDate="";S.cbrInfo="";saveDraft();render()}
 
@@ -153,7 +170,7 @@ ${S.showCarInfo?`<div class="coll-body">
 ${S.showSettings?`<div class="coll-body">
 <div class="rates-row" style="flex-wrap:wrap">
 ${S.activeCur.map(c=>`<div style="flex:1 1 40%;min-width:120px"><label class="rate-label ${curInfo(c).cls}">${curInfo(c).symbol} ${c} / ₽</label>
-<input type="text" inputmode="decimal" maxlength="16" class="rate-input ${curInfo(c).cls}" value="${esc(S.rates[c]||"")}" oninput="S.rates['${c}']=this.value;saveDraft()" onchange="render()"></div>`).join("")}
+<input type="text" inputmode="decimal" maxlength="16" class="rate-input ${curInfo(c).cls}" value="${esc(S.rates[c]||"")}" oninput="S.rates['${c}']=this.value;saveDraft()" onchange="render();offerRecalc()"></div>`).join("")}
 </div>
 <div class="cur-chips">
 ${Object.keys(CUR).filter(c=>c!=="RUB").map(c=>`<div class="cur-chip ${S.activeCur.includes(c)?"active":""}" onclick="togCur('${c}')">${CUR[c].symbol} ${c} · ${CUR[c].label}</div>`).join("")}</div>

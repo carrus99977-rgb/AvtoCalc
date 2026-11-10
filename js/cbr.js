@@ -26,7 +26,7 @@ const lbl=new Date((showDate||todayStr())+"T12:00:00");
 S.cbrInfo=`✓ Курс ЦБ на ${lbl.toLocaleDateString("ru-RU")}`;
 // S.cbrDate НЕ трогаем: им управляет пользователь (пусто = сегодня/авто). Иначе авто-фетч
 // «залипал» бы на дате публикации (пт) и в след. рабочий день не обновлялся бы.
-saveDraft();render();return true}
+saveDraft();render();offerRecalc();return true}
 
 async function fetchCbr(){
 if(S.cbrBusy)return;
@@ -106,7 +106,7 @@ const t=new Date(d.ts||Date.now()).toLocaleTimeString("ru-RU",{hour:"2-digit",mi
 // евро в ответе банка нет: не молчим — если EUR активна, её курс остался прежним (возможно, устаревшим)
 const eurTxt=d.eur>0?` · € ${fmtRate(d.eur)}`:(S.activeCur.includes("EUR")?" · € не обновлён (нет в ответе банка)":"");
 S.cbrInfo=`✓ ${d.src||"Камкомбанк (продажа)"} ${t} · $ ${fmtRate(d.usd)}${eurTxt} ₽`;
-saveDraft();render()}
+saveDraft();render();offerRecalc()}
 
 async function fetchMarket(){
 if(S.cbrBusy)return;
@@ -137,7 +137,7 @@ const t=new Date(d.ts||Date.now()).toLocaleTimeString("ru-RU",{hour:"2-digit",mi
 let warn="";const ta=d.tradeAt?Date.parse(d.tradeAt):NaN;
 if(isFinite(ta)&&Date.now()-ta>18e5){const tt=new Date(ta).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});warn=` ⚠ последняя сделка ${tt}`}
 S.cbrInfo=`✓ ${d.src||"ABCEX (USDT/₽)"} ${t} · $ ${fmtRate(d.usdt)} ₽ (в поле USD)${warn}`;
-saveDraft();render()}
+saveDraft();render();offerRecalc()}
 async function fetchUsdt(){
 if(S.cbrBusy)return;
 S.cbrBusy=true;S.cbrInfo="⏳ Загрузка курса USDT...";renderCbrInfo();
